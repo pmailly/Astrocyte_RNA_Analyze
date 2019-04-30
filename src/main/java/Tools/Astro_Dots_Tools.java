@@ -365,9 +365,7 @@ public static double maxThreshold = 65000;
     public static void doBleachCorrection (ImagePlus img) {
         double bg = find_background(img);
         BleachCorrection_SimpleRatio bleachCorr = new BleachCorrection_SimpleRatio(img, bg);
-        ImagePlus imgcorrectBleach = bleachCorr.correctBleach();
-        img = imgcorrectBleach.duplicate();
-        imgcorrectBleach.close();
+        img = bleachCorr.correctBleach();
     }
     
     /**
@@ -496,12 +494,17 @@ public static double maxThreshold = 65000;
         ImageHandler imgObjDotsLargeProcess = ImageHandler.wrap(img).createSameDimensions();
         for (int n = 0; n < dotsPop.getNbObjects(); n++) {
             Object3D obj = dotsPop.getObject(n);
-            if (obj.getValue() == 0)
-                obj.draw(imgObjDotsNotAstro, 255);
-            else if (obj.getValue() == 1)
-                obj.draw(imgObjDotsFineProcess, 255);
-            else
-                obj.draw(imgObjDotsLargeProcess, 255);
+            switch (obj.getValue()) {
+                case 0:
+                    obj.draw(imgObjDotsNotAstro, 255);
+                    break;
+                case 1:
+                    obj.draw(imgObjDotsFineProcess, 255);
+                    break;
+                default:
+                    obj.draw(imgObjDotsLargeProcess, 255);
+                    break;
+            }
         }
         // save image for objects population
         ImagePlus[] imgColors = {imgObjDotsNotAstro.getImagePlus(), imgObjDotsLargeProcess.getImagePlus(), imgObjNuc.getImagePlus(),

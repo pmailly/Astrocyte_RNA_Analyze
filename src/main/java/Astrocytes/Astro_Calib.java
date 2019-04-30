@@ -2,7 +2,6 @@ package Astrocytes;
 
 
 
-import Tools.Astro_Dots_Tools;
 import static Tools.Astro_Dots_Tools.dialog;
 import static Tools.Astro_Dots_Tools.doBleachCorr;
 import static Tools.Astro_Dots_Tools.doBleachCorrection;
@@ -159,14 +158,13 @@ public class Astro_Calib implements PlugIn {
                             if (Integer.parseInt(regExp[2]) > imgAstro.getNSlices())
                                 regExp[2] = Integer.toString(imgAstro.getNSlices());
                             String range = regExp[1] + "-" + regExp[2];
+                            
                             // bleach correction
                             if (doBleachCorr)
                                 doBleachCorrection(imgAstro);
                             // make substack                            
                             ImagePlus imgAstroZCrop = new SubstackMaker().makeSubstack(imgAstro, range);
                             imgAstro.close();
-                            if (doBleachCorr)
-                                doBleachCorrection(imgAstroZCrop);
                             
                             // open dots channel
                             ImagePlus imgDots = spinningReadChannel(reader, chIndex.get(2), imageName, cal);
@@ -191,7 +189,7 @@ public class Astro_Calib implements PlugIn {
                             }
                             double minInt = statsIntensity.getMin();
                             double maxInt = statsIntensity.getMax();
-                            double bg = find_background(imgAstro);
+                            double bg = find_background(imgAstroZCrop);
                             double minRatio = minInt/bg;
                             double maxRatio = maxInt/bg;
                             outPutResults.write(roi.getName()+"\t"+bg+"\t"+minInt+"\t"+maxInt+"\t"+minRatio+"\t"+maxRatio+"\n");

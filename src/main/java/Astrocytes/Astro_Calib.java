@@ -134,7 +134,7 @@ public class Astro_Calib implements PlugIn {
                                 cal.pixelDepth = meta.getPixelsPhysicalSizeZ(series).value().doubleValue();
                             String[] seriesName = meta.getImageName(0).split("/");
                             // return the index for channels 0 DAPI, 1 Astro, 2 Dots and ask for calibration if needed 
-                            chIndex = dialog(seriesName, showCal, cal, false);
+                            chIndex = dialog(seriesName, showCal, cal);
                             if (chIndex == null)
                                 return;
                             cal.setUnit("microns"); 
@@ -270,9 +270,9 @@ public class Astro_Calib implements PlugIn {
                         flush_close(imgDots);
                         outRoiResults.close();
                     }
-                }
-                outPutResults.close();   
+                } 
             }
+            outPutResults.close();
             IJ.showStatus("Calibration done....");
         } catch (DependencyException | ServiceException | IOException | FormatException ex) {
             Logger.getLogger(Astro_Calib.class.getName()).log(Level.SEVERE, null, ex);

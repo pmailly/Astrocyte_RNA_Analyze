@@ -54,9 +54,8 @@ public class Astro_Dots implements PlugIn {
     private final double minNucSize = 50;
     private final double maxNucSize = 5000;
     private final double minDotsSize = 0.03;
-    private final double maxDotsSize = 2000;
-    public static double meanDotsSize = 0.6;
-    public static double stdMeanDotsSize = 0.6;
+    private final double maxDotsSize = 20;
+    public static double meanSEMDotsSize = 0;
     private BufferedWriter outPutResults;
     
     /**
@@ -91,7 +90,7 @@ public class Astro_Dots implements PlugIn {
             outPutResults.write("ImageName\tRoi Name\tMean background\tStd background\tAstrocyte Volume\tDensity dots in Astro"
                     + "\tPercentage of dots not in astro\tPercentage of dots in soma\tPercentage of dots in fine processes\tPercentage of dots in large processes"
                     + "\tDots mean intensity in Astro\tSD intensity in astro\tMean astro diameter(0 exluded)\tStd astro diameter(0 excluded)"
-                    + "\tMed astro diameter\tMean nucleus distance\tStd nucleus distance\n");
+                    + "\tMed astro diameter(0 excluded)\n");
             outPutResults.flush();
             // create OME-XML metadata store of the latest schema version
             ServiceFactory factory;
@@ -131,7 +130,7 @@ public class Astro_Dots implements PlugIn {
                                 cal.pixelDepth = meta.getPixelsPhysicalSizeZ(series).value().doubleValue();
                             String[] seriesName = meta.getImageName(0).split("/");
                             // return the index for channels 0 DAPI, 1 Astro, 2 Dots and ask for calibration if needed 
-                            chIndex = dialog(seriesName, showCal, cal, true);
+                            chIndex = dialog(seriesName, showCal, cal);
                             if (chIndex == null)
                                 return;
                             cal.setUnit("microns");
@@ -195,7 +194,7 @@ public class Astro_Dots implements PlugIn {
                             rm.select(imgNucZCrop,r);
                             Roi roi = imgNucZCrop.getRoi();
                             imgNucZCrop.deleteRoi();
-                            median_filter(imgNuc, 2);
+                            median_filter(imgNuc, 4);
                             IJ.run(imgNucZCrop, "Difference of Gaussians", "  sigma1=30 sigma2=20 stack");
                             threshold(imgNucZCrop, "Li", true);
                             imgNucZCrop.setRoi(roi);
@@ -251,9 +250,15 @@ public class Astro_Dots implements PlugIn {
                                 // Find dots population
                                 Objects3DPopulation dotsPop = find_dots(imgDotsZCrop, roi, useDeconvImg);
                                 System.out.println("Dots number = "+dotsPop.getNbObjects());
-                                objectsSizeFilter(minDotsSize, maxDotsSize, dotsPop, imgDotsZCrop, false);
-                                System.out.println("After size filter dots number = "+dotsPop.getNbObjects());
-                                
+                                // Duplicate dots Population to filter dots without "macro-dots" to calculate the mean dot size
+                                Objects3DPopulation dotsPopNotMacro = dotsPop;
+                                objectsSizeFilter(minDotsSize, maxDotsSize, dotsPopNotMacro, imgDotsZCrop, false);
+                                meanSEMDotsSize = find_mean_dots_volume(dotsPopNotMacro);
+                                System.out.println("Dots mean size volume = " + meanSEMDotsSize);
+                                // min size filter including macro-dots
+                                objectsSizeFilter(minDotsSize, Integer.MAX_VALUE, dotsPop, imgDotsZCrop, false);
+                                System.out.println("After min size filter dots number = "+dotsPop.getNbObjects());
+                                                                
                                 // calculate parameters
                                 classify_dots(nucAstro, dotsPop, imgAstroZCrop, imgAstroZCropMap);                              
 

@@ -10,9 +10,7 @@ import static Tools.Astro_Dots_Tools.flush_close;
 import static Tools.Astro_Dots_Tools.labelsObject;
 import static Tools.Astro_Dots_Tools.localThickness3D;
 import static Tools.Astro_Dots_Tools.objectsSizeFilter;
-import static Tools.Astro_Dots_Tools.spinningReadChannel;
 import static Tools.Astro_Dots_Tools.stdBg;
-import static Tools.Astro_Dots_Tools.useDeconvImg;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Roi;
@@ -67,7 +65,7 @@ public class Astro_Calib implements PlugIn {
     private BufferedWriter outPutResults;
     private final double minDotsSize = 0.03;
     private final double maxDotsSize = 20;
-
+    private final String[] ch = {"0", "1", "2", "3"}; 
     /**
      * 
      * @param arg
@@ -80,7 +78,7 @@ public class Astro_Calib implements PlugIn {
                 IJ.showMessage(" Pluging canceled");
                 return;
             }
-            imageDir = IJ.getDirectory("Choose Directory Containing ND Files...");
+            imageDir = IJ.getDirectory("Choose Directory Containing ICS Files...");
             if (imageDir == null) {
                 return;
             }
@@ -108,9 +106,9 @@ public class Astro_Calib implements PlugIn {
             ArrayList<Integer> chIndex = new ArrayList();
             for (int i = 0; i < imageFile.length; i++) {
                 // Find nd files
-                if (imageFile[i].endsWith(".nd")) {
+                if (imageFile[i].endsWith(".ics")) {
                     String imageName = inDir+ File.separator+imageFile[i];
-                    String rootName = imageFile[i].replace(".nd", "");
+                    String rootName = imageFile[i].replace(".ics", "");
                     // Find ROI calibration file
                     String roi_file = imageDir+rootName+".zip";
                     if (!new File(roi_file).exists()) {
@@ -132,10 +130,9 @@ public class Astro_Calib implements PlugIn {
                                 showCal = true;
                             else
                                 cal.pixelDepth = meta.getPixelsPhysicalSizeZ(series).value().doubleValue();
-                            String[] seriesName = meta.getImageName(0).split("/");
                             // return the index for channels 0 DAPI, 1 Astro, 2 Dots and ask for calibration if needed 
-                            chIndex = dialog(seriesName, showCal, cal);
-                            if (chIndex == null)
+                            chIndex = dialog(ch, showCal, cal);
+                            if (ch == null)
                                 return;
                             cal.setUnit("microns"); 
                             System.out.println("x cal = " +cal.pixelWidth+", z cal = " + cal.pixelDepth);
@@ -158,29 +155,20 @@ public class Astro_Calib implements PlugIn {
                         int roiIndex = 0;
                         ImporterOptions options = new ImporterOptions();
                         options.setColorMode(ImporterOptions.COLOR_MODE_GRAYSCALE);
-                        options.setId(imageDir + File.separator + rootName + "_"+ rootName + "_0_cmle.ics");
+                        options.setId(imageName);
                         options.setSplitChannels(true);
                         
                         /** 
                          * open channels
                          */
                         // astro channel    
-                        ImagePlus imgAstro = new ImagePlus();
-                        if(useDeconvImg) {
-                            imgAstro = BF.openImagePlus(options)[chIndex.get(1)];
-                            IJ.showStatus("Opening Astrocyte channel");
-                        }
-                        else 
-                            imgAstro = spinningReadChannel(reader, chIndex.get(1), imageName, cal);
-                            
+                        ImagePlus imgAstro = BF.openImagePlus(options)[chIndex.get(1)];
+                        IJ.showStatus("Opening Astrocyte channel");
+                       
                         // dots channel
-                        ImagePlus imgDots = new ImagePlus();
-                        if(useDeconvImg) {
-                            imgDots = BF.openImagePlus(options)[chIndex.get(2)];
-                             IJ.showStatus("Opening Dots channel");
-                        }
-                        else
-                            imgDots = spinningReadChannel(reader, chIndex.get(2), imageName, cal);
+                        ImagePlus imgDots = BF.openImagePlus(options)[chIndex.get(2)];
+                        IJ.showStatus("Opening Dots channel");
+
                         for (int r = 0; r < rm.getCount(); r++) {
                             roiIndex++;
                             rm.select(imgAstro, r);
@@ -216,7 +204,7 @@ public class Astro_Calib implements PlugIn {
                             ImagePlus imgDotsZCrop = new Duplicator().run(imgDots, zStart, zStop);
 
                             // Find dots population
-                            Objects3DPopulation dotsPop = find_dots(imgDotsZCrop, imgDotsZCrop.getRoi(), useDeconvImg);
+                            Objects3DPopulation dotsPop = find_dots(imgDotsZCrop, imgDotsZCrop.getRoi());
                             System.out.println("Dots number = "+dotsPop.getNbObjects());
                             objectsSizeFilter(minDotsSize, maxDotsSize, dotsPop, imgDotsZCrop, false);
                             System.out.println("After size filter dots number = "+dotsPop.getNbObjects());

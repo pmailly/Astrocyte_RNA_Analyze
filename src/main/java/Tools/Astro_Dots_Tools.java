@@ -61,11 +61,11 @@ import sc.fiji.localThickness.Local_Thickness_Parallel;
 
 public class Astro_Dots_Tools {
     
-//Intensity threshold for dots in GFAP channel   
-public static boolean useDeconvImg = false;
 public static String thMethod = "";
 public static double bg = 0;
 public static double stdBg = 0;
+// if pureArn exclude no dots
+public static boolean pureArn = false;
     /**
      * Read channels
      * @param r
@@ -115,18 +115,18 @@ public static double stdBg = 0;
             gd.addNumericField("XY pixel size : ", cal.pixelWidth, 3);
             gd.addNumericField("Z pixel size : ", 1, 3);
         }
-        gd.addChoice("Threshold Methods", thMethods, thMethods[5]);
-        gd.addCheckbox("Use deconvolved image ", false);
+        gd.addChoice("Dots Threshold Method", thMethods, thMethods[5]);
+        gd.addCheckbox(" pure ARN in astrocyte", pureArn);
         gd.showDialog();
-        ch.add(0, gd.getNextChoiceIndex());
-        ch.add(1, gd.getNextChoiceIndex());
-        ch.add(2, gd.getNextChoiceIndex());
+        ch.add(0, Integer.parseInt(gd.getNextChoice()));
+        ch.add(1, Integer.parseInt(gd.getNextChoice()));
+        ch.add(2, Integer.parseInt(gd.getNextChoice()));
         thMethod = thMethods[gd.getNextChoiceIndex()];
+        pureArn = gd.getNextBoolean();
         if (showCal) {
             cal.pixelWidth = gd.getNextNumber();
             cal.pixelDepth = gd.getNextNumber();
         }
-        useDeconvImg = gd.getNextBoolean();
         if(gd.wasCanceled())
             ch = null;
         return(ch);
@@ -182,11 +182,11 @@ public static double stdBg = 0;
         return(zmax);
     }
     
-    public static Object3D nucleusSelect(ImagePlus img, Objects3DPopulation nucPop) {
-        int nucSelected = find_astroNuc(nucPop, img);
-        ImageHandler imgObjNuc = ImageHandler.wrap(img).createSameDimensions();
-        ImageHandler imgObjNucSelected = ImageHandler.wrap(img).createSameDimensions();
-        ImagePlus imgAstro = doZProjection(img.duplicate(), ZProjector.MAX_METHOD);
+    public static Object3D nucleusSelect(ImagePlus imgAstro, Objects3DPopulation nucPop) {
+        int nucSelected = find_astroNuc(nucPop, imgAstro);
+        ImageHandler imgObjNuc = ImageHandler.wrap(imgAstro).createSameDimensions();
+        ImageHandler imgObjNucSelected = ImageHandler.wrap(imgAstro).createSameDimensions();
+        ImagePlus imgAstroProj = doZProjection(imgAstro.duplicate(), ZProjector.MAX_METHOD);
         IJ.run(imgAstro, "Enhance Contrast", "saturated=0.35");
         String[] nucIndex = new String[nucPop.getNbObjects()];
         boolean[] values = new boolean[nucPop.getNbObjects()];
@@ -238,6 +238,7 @@ public static double stdBg = 0;
         }
         Object3DVoxels objVoxel = new Object3DVoxels(imgObjNuc);
         objVoxel.addVoxelsUnion(objSelected);
+        objVoxel.setValue(0);
         return(objVoxel);
     }
     
@@ -394,14 +395,13 @@ public static double stdBg = 0;
      */
     
     public static int find_astroNuc( Objects3DPopulation nucPop, ImagePlus imgAstro) {
-        double maxInt = 0;
+        double maxAstroInt = 0;
         int index = 0;      
         for (int o = 0; o < nucPop.getNbObjects(); o++) {
             Object3D obj = nucPop.getObject(o);
             double astroInt = obj.getPixMeanValue(ImageHandler.wrap(imgAstro));
-            //System.out.println(astroInt);
-            if (astroInt > maxInt) {
-                maxInt = astroInt;
+            if (astroInt > maxAstroInt) {
+                maxAstroInt = astroInt;
                 index = o;
             }
         }
@@ -471,7 +471,7 @@ public static double stdBg = 0;
         ImageHandler seedsImg;
         seedsImg = FastFilters3D.filterImage(edt16, FastFilters3D.MAXLOCAL, radXY, radXY, radZ, 0, false);
         IJ.showStatus("Computing watershed");
-        Watershed3D water = new Watershed3D(edt16, seedsImg, 0, 1);
+        Watershed3D water = new Watershed3D(edt16, seedsImg, 10, 1);
         ImagePlus imp = water.getWatershedImage3D().getImagePlus();
         IJ.setThreshold(imp, 1, 65535);
         Prefs.blackBackground = false;
@@ -488,15 +488,12 @@ public static double stdBg = 0;
      * Find dots population
      * @param imgDots
      * @param roi
-     * @param deconv
      * @return dotsPop
      */
     
-    public static Objects3DPopulation find_dots(ImagePlus imgDots, Roi roi, boolean deconv) {
+    public static Objects3DPopulation find_dots(ImagePlus imgDots, Roi roi) {
         ImagePlus imp = imgDots.duplicate();
         median_filter(imgDots, 1);
-        if (!deconv)
-            IJ.run(imp, "Difference of Gaussians", "  sigma1=3 sigma2=1 enhance stack");
         threshold(imp, thMethod, false);   
         if (roi != null) {
             imp.setRoi(roi);
@@ -585,16 +582,21 @@ public static double stdBg = 0;
     public static void classify_dots(Object3D nucObj, Objects3DPopulation dotsPop, ImagePlus imgAstro, ImagePlus astroMap) {
         IJ.showStatus("Classify dots ....");
         find_background(imgAstro);
+        // if purearn exclude no dot
+        // BgThresholdInt = -1
         double BgThresholdInt = bg + stdBg;
+        if (pureArn)
+            BgThresholdInt= -1;
         // measure dots mean intensity and volume
         for (int n = 0; n < dotsPop.getNbObjects(); n++) {
             Object3D dotObj = dotsPop.getObject(n);
             double astroDiameter = dotObj.getPixMaxValue(ImageHandler.wrap(astroMap)) * imgAstro.getCalibration().pixelWidth;
             double meanIntDotAstroimg = dotObj.getPixMeanValue(ImageHandler.wrap(imgAstro));
             /* classify dots
+            * 
             * dots 0  dots <= minThresholdInt and dist > 2 (not in astro (red))
             * dots 1  dots > minThresholdInt  and astroDiameter <= spatial res in Z and dist > 2 (fine processes (magenta))
-            * dots 2 dots (larger processes (green))
+            * dots 2 dots (larger processes + somatic (green))
             */
             double distNuc = 0;
             if (nucObj.includes(dotObj))
@@ -625,20 +627,21 @@ public static double stdBg = 0;
      * @param imageName
      * @throws java.io.IOException
      */
-    public static void compute_Image_parameters(Roi roi, ImagePlus imgAstro, ImagePlus imgAstroMap, Object3D nucObj, Objects3DPopulation dotsPop,
+    public static void compute_Image_parameters(Roi roi, int roiIndex, int totalRoi, ImagePlus imgAstro, ImagePlus imgAstroMap, Object3D nucObj, Objects3DPopulation dotsPop,
             BufferedWriter results, String imageName) throws IOException {
         /* write headers
-        * largeBrDots (dots in large branches) = dots 2
+        * largeBrDots (dots in large branches) = dots 2 - dotsinSoma
         * fineBrDots (dots in fine branches) = dots 1
         * dotsNoinAstro (dots outiside astrocyte) = dots 0
         * totalDots (all dots) = dots0 + dots1 + dots2
-        * dotsinAstro (dots in astrocyte) = largeBrDots + fineBrDots
+        * dotsinAstro (dots in astrocyte) = largeBrDots + fineBrDots + dotsinSoma
         * dotsinSoma (dots inside soma) = dots with dist to nucleus < 2
         * dotsinNuc (dots in nucleus) = dots with dist = 0
         * dotsdensinAstro (dots density in astrocyte) = dotsinAstro / astroVolume
         * percDotsNotinAstro (% dots not in astrocyte = dotsNotinAstro / totalDots
         * percDotsinSoma (% dots in soma) = dotsinSoma/totalDotsAstro
-        * perDostFineBr (% dost in fine branches) = fineBrDots / totalDotsAstro
+        * perDostFineBr (% dots in fine branches) = fineBrDots / totalDotsAstro
+        * perDostLargeBr (% dots in large branches) = largeBrDots / totalDotsAstro
         */
         
         // measure roi volume
@@ -672,7 +675,7 @@ public static double stdBg = 0;
                 case 0 :
                     if (dotVol >= meanSEMDotsSize) {
                         double ratioVol = Math.round(dotVol/meanSEMDotsSize);
-                        dotsNoinAstro+=ratioVol;
+                        dotsNoinAstro += ratioVol;
                     }
                     else
                         dotsNoinAstro++;
@@ -680,7 +683,7 @@ public static double stdBg = 0;
                 case 1 :
                     if (dotVol >= meanSEMDotsSize) {
                         double ratioVol = Math.round(dotVol/meanSEMDotsSize);
-                        dotsinFineBr+=ratioVol;
+                        dotsinFineBr += ratioVol;
                     }
                     else
                         dotsinFineBr++;
@@ -688,7 +691,7 @@ public static double stdBg = 0;
                 case 2 : 
                     if (dotVol >= meanSEMDotsSize) {
                         double ratioVol = Math.round(dotVol/meanSEMDotsSize);
-                        dotsinLargeBr+= ratioVol;
+                        dotsinLargeBr += ratioVol;
                     }
                     else {
                         dotsinLargeBr++;
@@ -706,19 +709,21 @@ public static double stdBg = 0;
             double IntdotsinAstro = dotObj.getPixMeanValue(ImageHandler.wrap(imgAstro));
             dotMeanIntStats.addValue(IntdotsinAstro);
         }
-        float totalDots = dotsinLargeBr + dotsinFineBr + dotsNoinAstro;
-        float dotsinAstro = dotsinLargeBr + dotsinFineBr;
+        // exclude dot in soma for large dots
+        dotsinLargeBr = dotsinLargeBr - dotsinSoma;
+        float totalDots = dotsinLargeBr + dotsinFineBr + dotsNoinAstro + dotsinSoma;
+        float dotsinAstro = dotsinLargeBr + dotsinFineBr + dotsinSoma;
         double dotsdensinAstro = dotsinAstro / astroVol;
         double percDotsNotinAstro = 100*(dotsNoinAstro / totalDots);
         double percDotsinSoma = 100*(dotsinSoma / dotsinAstro);
         double perDotsFineBr = 100*(dotsinFineBr / dotsinAstro);
-        double perDotsLargeBr = 100*(dotsinLargeBr / dotsinAstro);
+        double perDotsLargeBr = 100*((dotsinLargeBr) / dotsinAstro);
         double meanIntDotsinAstro = dotMeanIntStats.getMean();
         double sdIntDotsinAstro = dotMeanIntStats.getStandardDeviation();
         double meanAstroDiameter = dotDiameterStats.getMean();
         double stdAstroDiameter = dotDiameterStats.getStandardDeviation();
         double medAstroDiameter = dotDiameterStats.getPercentile(50); 
-        results.write(imageName + "\t" + roiName + "\t" + bg + "\t" + stdBg + "\t" + astroVol + "\t" + dotsdensinAstro +
+        results.write(imageName + "\t" + roiName + "("+(roiIndex+1)+"/"+totalRoi+")" + "\t" + bg + "\t" + stdBg + "\t" + astroVol + "\t" + dotsdensinAstro +
                 "\t" + percDotsNotinAstro + "\t" + percDotsinSoma + "\t" + perDotsFineBr + "\t" + perDotsLargeBr +
                 "\t" + meanIntDotsinAstro + "\t" + sdIntDotsinAstro + "\t"+meanAstroDiameter+"\t"+stdAstroDiameter+
                 "\t"+medAstroDiameter+"\n");

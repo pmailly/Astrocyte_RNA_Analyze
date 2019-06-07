@@ -6,10 +6,12 @@ import static Tools.Astro_Dots_Tools.*;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Roi;
+import ij.gui.WaitForUserDialog;
 import ij.measure.Calibration;
 import ij.plugin.Duplicator;
 import ij.plugin.PlugIn;
 import ij.plugin.frame.RoiManager;
+import ij.process.FloatPolygon;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -51,12 +53,13 @@ public class Astro_Dots implements PlugIn {
     public static String outDirResults = "";
     private Calibration cal = new Calibration();
     private final double stepZ = 0.3;
-    private final double minNucSize = 50;
-    private final double maxNucSize = 5000;
+    private final double minNucSize = 20;
+    private final double maxNucSize = 500;
     private final double minDotsSize = 0.03;
     private final double maxDotsSize = 20;
     public static double meanSEMDotsSize = 0;
     private BufferedWriter outPutResults;
+    
     
     /**
      * 
@@ -69,7 +72,7 @@ public class Astro_Dots implements PlugIn {
                 IJ.showMessage(" Pluging canceled");
                 return;
             }
-            imageDir = IJ.getDirectory("Choose Directory Containing ND Files...");
+            imageDir = IJ.getDirectory("Choose Directory Containing ICS Files...");
             if (imageDir == null) {
                 return;
             }
@@ -87,7 +90,7 @@ public class Astro_Dots implements PlugIn {
             // Write headers for results file
             FileWriter fileResults = new FileWriter(outDirResults + "Astro_results.xls", false);
             outPutResults = new BufferedWriter(fileResults);
-            outPutResults.write("ImageName\tRoi Name\tMean background\tStd background\tAstrocyte Volume\tDensity dots in Astro"
+            outPutResults.write("ImageName\tRoi Name \tMean background\tStd background\tAstrocyte Volume\tDensity dots in Astro"
                     + "\tPercentage of dots not in astro\tPercentage of dots in soma\tPercentage of dots in fine processes\tPercentage of dots in large processes"
                     + "\tDots mean intensity in Astro\tSD intensity in astro\tMean astro diameter(0 exluded)\tStd astro diameter(0 excluded)"
                     + "\tMed astro diameter(0 excluded)\n");
@@ -101,12 +104,12 @@ public class Astro_Dots implements PlugIn {
             reader.setMetadataStore(meta);
             Arrays.sort(imageFile);
             int imageNum = 0;
-            ArrayList<Integer> chIndex = new ArrayList();
+            ArrayList<Integer> ch = new ArrayList();
             for (int i = 0; i < imageFile.length; i++) {
                 // Find nd files
-                if (imageFile[i].endsWith(".nd")) {
+                if (imageFile[i].endsWith(".ics")) {
                     String imageName = inDir+ File.separator+imageFile[i];
-                    String rootName = imageFile[i].replace(".nd", "");
+                    String rootName = imageFile[i].replace(".ics", "");
                     // Find ROI file
                     String roi_file = imageDir+rootName+".zip";
                     if (!new File(roi_file).exists()) {
@@ -117,8 +120,12 @@ public class Astro_Dots implements PlugIn {
                         reader.setId(imageName);
                         int series = 0;
                         reader.setSeries(0);
+                        int nbChannels = reader.getSizeC();
                         imageNum++;
                         boolean showCal = false;
+                        String[] channels = new String[nbChannels];
+                        for (int c = 0; c < nbChannels; c++)
+                            channels[c] = Integer.toString(c);
                         // Check calibration
                         if (imageNum == 1) {
                             cal.pixelWidth = meta.getPixelsPhysicalSizeX(series).value().doubleValue();
@@ -128,10 +135,10 @@ public class Astro_Dots implements PlugIn {
                                 showCal = true;
                             else
                                 cal.pixelDepth = meta.getPixelsPhysicalSizeZ(series).value().doubleValue();
-                            String[] seriesName = meta.getImageName(0).split("/");
-                            // return the index for channels 0 DAPI, 1 Astro, 2 Dots and ask for calibration if needed 
-                            chIndex = dialog(seriesName, showCal, cal);
-                            if (chIndex == null)
+                            
+                            // return the index for channels DAPI, Astro, Dots and ask for calibration if needed 
+                            ch = dialog(channels, showCal, cal);
+                            if (ch == null)
                                 return;
                             cal.setUnit("microns");
                             System.out.println("x cal = " +cal.pixelWidth+", z cal = " + cal.pixelDepth);
@@ -142,37 +149,23 @@ public class Astro_Dots implements PlugIn {
                         int index = 0;
                         ImporterOptions options = new ImporterOptions();
                         options.setColorMode(ImporterOptions.COLOR_MODE_GRAYSCALE);
-                        options.setId(imageDir + File.separator + rootName + "_"+ rootName + "_0_cmle.ics");
+                        options.setId(imageName);
                         options.setSplitChannels(true);
                         /**
                          * Open channels
                          */
                         // Nucleus channel
-                        ImagePlus imgNuc = new ImagePlus();  
-                        if (useDeconvImg) {
-                            IJ.showStatus("Opening Nucleus channel");
-                            imgNuc = BF.openImagePlus(options)[chIndex.get(0)];
-                        }
-                        else
-                            imgNuc = spinningReadChannel(reader, chIndex.get(0), imageName, cal);
+                        IJ.showStatus("Opening Nucleus channel");
+                        ImagePlus imgNuc = BF.openImagePlus(options)[ch.get(0)];
+                        IJ.run(imgNuc,"16-bit", "");
                         
                         // Astrocyte channel
-                        ImagePlus imgAstro = new ImagePlus();  
-                        if (useDeconvImg) {
-                            IJ.showStatus("Opening Astrocyte channel");
-                            imgAstro = BF.openImagePlus(options)[chIndex.get(1)];
-                        }
-                        else
-                            imgAstro = spinningReadChannel(reader, chIndex.get(1), imageName, cal);
+                        IJ.showStatus("Opening Astrocyte channel");
+                        ImagePlus imgAstro = BF.openImagePlus(options)[ch.get(1)];
                         
                         // Dots channel
-                        ImagePlus imgDots = new ImagePlus();  
-                        if (useDeconvImg) {
-                            IJ.showStatus("Opening Dots channel");
-                            imgDots = BF.openImagePlus(options)[chIndex.get(2)];
-                        }
-                        else
-                            imgDots = spinningReadChannel(reader, chIndex.get(2), imageName, cal);
+                        IJ.showStatus("Opening Dots channel");
+                        ImagePlus    imgDots = BF.openImagePlus(options)[ch.get(2)];
                         
                         // for each roi open image and crop
                         for (int r = 0; r < rm.getCount(); r++) {
@@ -188,25 +181,27 @@ public class Astro_Dots implements PlugIn {
                             int zStop = Integer.parseInt(regExp[2]);
                             rm.select(imgNuc,r);
                             imgNuc.updateAndDraw();
-                           
+                            Roi roiAstro = imgNuc.getRoi();
                             // make substack
                             ImagePlus imgNucZCrop = new Duplicator().run(imgNuc, zStart, zStop);
-                            rm.select(imgNucZCrop,r);
-                            Roi roi = imgNucZCrop.getRoi();
+                            // bug in roi manager recenter roi
+                            imgNucZCrop.setRoi(roiAstro);
+                            roiAstro.setLocation(0, 0);
+                            imgNucZCrop.updateAndDraw();
+                            roiAstro = imgNucZCrop.getRoi();
                             imgNucZCrop.deleteRoi();
+                            IJ.run(imgNucZCrop, "16-bit", "");
                             median_filter(imgNuc, 4);
                             IJ.run(imgNucZCrop, "Difference of Gaussians", "  sigma1=30 sigma2=20 stack");
-                            threshold(imgNucZCrop, "Li", true);
-                            imgNucZCrop.setRoi(roi);
+                            threshold(imgNucZCrop, "Otsu", true);
+                            imgNucZCrop.setRoi(roiAstro);
                             imgNucZCrop.updateAndDraw();
                             IJ.run("Colors...", "foreground=black background=white selection=yellow");
                             IJ.run(imgNucZCrop, "Clear Outside", "stack");
                             imgNucZCrop.deleteRoi();
-                            IJ.run(imgNucZCrop, "Options...", "iterations=10 count=1 do=Open stack");
-                            IJ.run(imgNucZCrop, "Fill Holes", "stack");
                             
                             // WaterShed slipt
-                            ImagePlus imgNucSplit = watershedSplit(imgNucZCrop, 6);
+                            ImagePlus imgNucSplit = watershedSplit(imgNucZCrop, 10);
                             imgNucSplit.setCalibration(cal);
                             IJ.run(imgNucSplit, "Fill Holes", "stack");
                             // find nucleus population
@@ -226,14 +221,12 @@ public class Astro_Dots implements PlugIn {
                                 ImagePlus imgAstroZCrop = new Duplicator().run(imgAstro, zStart, zStop);  
                                 imgAstroZCrop.setTitle(rootName+"_Astro");
                                 
+                                
                                 Object3D nucAstro = null;
                                 // if more than one nucleus find nucleus with intensity in astrocyte channel
                                 // and ask to choose
-                                if (nucPop.getNbObjects() > 1) {
-                                    ImagePlus img = imgAstroZCrop.duplicate();
-                                    nucAstro = nucleusSelect(img, nucPop);
-                                    flush_close(img);
-                                }                                    
+                                if (nucPop.getNbObjects() > 1) 
+                                    nucAstro = nucleusSelect(imgAstroZCrop, nucPop);                                  
                                 else
                                     nucAstro = nucPop.getObject(0);
                                 
@@ -248,13 +241,13 @@ public class Astro_Dots implements PlugIn {
                                 ImagePlus imgDotsZCrop = new Duplicator().run(imgDots, zStart, zStop); 
                                 
                                 // Find dots population
-                                Objects3DPopulation dotsPop = find_dots(imgDotsZCrop, roi, useDeconvImg);
+                                Objects3DPopulation dotsPop = find_dots(imgDotsZCrop, roiAstro);
                                 System.out.println("Dots number = "+dotsPop.getNbObjects());
                                 // Duplicate dots Population to filter dots without "macro-dots" to calculate the mean dot size
                                 Objects3DPopulation dotsPopNotMacro = dotsPop;
                                 objectsSizeFilter(minDotsSize, maxDotsSize, dotsPopNotMacro, imgDotsZCrop, false);
                                 meanSEMDotsSize = find_mean_dots_volume(dotsPopNotMacro);
-                                System.out.println("Dots mean size volume = " + meanSEMDotsSize);
+                                System.out.println("Dots mean size volume + sem = " + meanSEMDotsSize);
                                 // min size filter including macro-dots
                                 objectsSizeFilter(minDotsSize, Integer.MAX_VALUE, dotsPop, imgDotsZCrop, false);
                                 System.out.println("After min size filter dots number = "+dotsPop.getNbObjects());
@@ -266,7 +259,7 @@ public class Astro_Dots implements PlugIn {
                                 tagsObjects(nucAstro, dotsPop, imgAstroZCrop, outDirResults, rootName, r);                               
 
                                 // write a global parameters table by image
-                                compute_Image_parameters(roi, imgAstroZCrop, imgAstroZCropMap, nucAstro, dotsPop, outPutResults, rootName);
+                                compute_Image_parameters(roiAstro, r, rm.getCount(), imgAstroZCrop, imgAstroZCropMap, nucAstro, dotsPop, outPutResults, rootName);
                                 flush_close(imgAstroZCrop);
                                 flush_close(imgAstroZCropMap);
                             }

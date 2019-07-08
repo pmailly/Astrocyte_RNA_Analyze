@@ -194,12 +194,12 @@ private static double thinDiam;
             values[i] = false;
             if (i == nucSelected) {
                 obj.draw(imgObjNucSelected);
-                labelsObject(obj, imgObjNucSelected.getImagePlus(), i, 255, 24);
+                labelsObject(obj, imgObjNucSelected.getImagePlus(), i, 255, 16);
                 values[i] = true;
             }
             else {
                 obj.draw(imgObjNuc);
-                labelsObject(obj, imgObjNuc.getImagePlus(), i, 255, 24);
+                labelsObject(obj, imgObjNuc.getImagePlus(), i, 255, 16);
             }
         }
         ImagePlus imgObjNucProj = doZProjection(imgObjNuc.getImagePlus(), ZProjector.MAX_METHOD);
@@ -252,11 +252,9 @@ private static double thinDiam;
      */
     public static void threshold(ImagePlus img, String thMed, boolean fill) {
         //  Threshold and binarize
-        img.setZ(img.getNSlices()/2);
-        img.updateAndDraw();
         IJ.setAutoThreshold(img, thMed + " dark");
         Prefs.blackBackground = false;
-        IJ.run(img, "Convert to Mask", "method="+thMed+" background=Dark");
+        IJ.run(img, "Convert to Mask", "method="+thMed+" background=Dark calculate");
         if (fill) {
             IJ.run(img,"Fill Holes", "stack");
         }
@@ -461,6 +459,7 @@ private static double thinDiam;
      * Nucleus segmentation
      */
     public static ImagePlus segmentNucleus(ImagePlus imgNucZCrop, Roi roiAstro) {
+        imgNucZCrop.deleteRoi();
         median_filter(imgNucZCrop, 4);
         IJ.run(imgNucZCrop, "Difference of Gaussians", "  sigma1=30 sigma2=28 stack");
         threshold(imgNucZCrop, "Otsu", true);
@@ -468,7 +467,6 @@ private static double thinDiam;
         imgNucZCrop.setRoi(roiAstro);
         imgNucZCrop.updateAndDraw();
         IJ.run("Colors...", "foreground=black background=white selection=yellow");
-        IJ.run(imgNucZCrop, "Clear Outside", "stack");
         IJ.run(imgNucZCrop,"Analyze Particles...", "  show=Masks exclude clear stack");
         ImagePlus imgNucMask = WindowManager.getImage("Mask of "+imgNucZCrop.getTitle());
         imgNucMask.hide();
@@ -625,7 +623,9 @@ private static double thinDiam;
         ImageProcessor ip = img.getProcessor();
         ip.setFont(tagFont);
         ip.setColor(color);
-        ip.drawString(Integer.toString(number), x, y);
+        String zPosMin = String.valueOf(Math.round(obj.getZmin()));
+        String zPosMax = String.valueOf(Math.round(obj.getZmax()));
+        ip.drawString(Integer.toString(number)+" ("+zPosMin+"-"+zPosMax+")", x, y);
         img.updateAndDraw();    
     }
     

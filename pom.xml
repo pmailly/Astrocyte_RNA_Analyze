@@ -6,10 +6,10 @@
 	<modelVersion>4.0.0</modelVersion>
         
 	<groupId>cirb</groupId>
-	<artifactId>Astro_Fish</artifactId>
+	<artifactId>Astro_Dots</artifactId>
 	<version>1.0.0-SNAPSHOT</version>
         <packaging>jar</packaging>
-	<name>plugins/Astro_Fish.jar</name>
+	<name>plugins/Astro_Dots.jar</name>
 	<description>Measure intensity, nb of dots in cytoplasm and branch of Astrocytes
         </description>
 

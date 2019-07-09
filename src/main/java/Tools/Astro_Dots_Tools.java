@@ -11,6 +11,7 @@ import ij.ImageStack;
 import ij.Prefs;
 import ij.WindowManager;
 import ij.gui.GenericDialog;
+import ij.gui.NonBlockingGenericDialog;
 import ij.gui.Roi;
 import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
@@ -182,10 +183,9 @@ private static double thinDiam;
     
     public static Object3D nucleusSelect(ImagePlus imgAstro, ImagePlus imgDots, Objects3DPopulation nucPop) {
         int nucSelected = find_astroNuc(nucPop, imgAstro, imgDots);
-        ImageHandler imgObjNuc = ImageHandler.wrap(imgAstro).createSameDimensions();
-        ImageHandler imgObjNucSelected = ImageHandler.wrap(imgAstro).createSameDimensions();
-        ImagePlus imgAstroProj = doZProjection(imgAstro.duplicate(), ZProjector.MAX_METHOD);
-        IJ.run(imgAstroProj, "Enhance Contrast", "saturated=0.35");
+        ImagePlus img = imgAstro.duplicate();
+        ImageHandler imgObjNuc = ImageHandler.wrap(img).createSameDimensions();
+        ImageHandler imgObjNucSelected = ImageHandler.wrap(img).createSameDimensions();
         String[] nucIndex = new String[nucPop.getNbObjects()];
         boolean[] values = new boolean[nucPop.getNbObjects()];
         for (int i = 0; i < nucPop.getNbObjects(); i++) {
@@ -202,20 +202,15 @@ private static double thinDiam;
                 labelsObject(obj, imgObjNuc.getImagePlus(), i, 255, 16);
             }
         }
-        ImagePlus imgObjNucProj = doZProjection(imgObjNuc.getImagePlus(), ZProjector.MAX_METHOD);
-        IJ.run(imgObjNucProj, "Enhance Contrast", "saturated=0.35");
-        imgObjNuc.closeImagePlus();
-        ImagePlus imgObjNucSelectedProj = doZProjection(imgObjNucSelected.getImagePlus(), ZProjector.MAX_METHOD);
-        IJ.run(imgObjNucSelectedProj, "Enhance Contrast", "saturated=0.35");
-        
-        ImagePlus[] imgColors = {imgObjNucProj, imgObjNucSelectedProj, null, imgAstroProj, null};
+        IJ.run(imgObjNuc.getImagePlus(), "Enhance Contrast", "saturated=0.35");
+        IJ.run(imgObjNucSelected.getImagePlus(), "Enhance Contrast", "saturated=0.35");
+        img.setSlice(img.getNSlices()/2);
+        IJ.run(img, "Enhance Contrast", "saturated=0.35");
+        img.updateAndDraw();
+        ImagePlus[] imgColors = {imgObjNuc.getImagePlus(), imgObjNucSelected.getImagePlus(), null, img, null};
         ImagePlus imgObjects = new RGBStackMerge().mergeHyperstacks(imgColors, false);
-        
-        flush_close(imgObjNucProj);
-        flush_close(imgObjNucSelectedProj);
-        
         imgObjects.show("Nucleus");
-        GenericDialog gd = new GenericDialog("Astrocyte nucleus");
+        NonBlockingGenericDialog gd = new NonBlockingGenericDialog("Astrocyte nucleus");
         gd.addMessage("Choose astrocyte nucleus");
         gd.addCheckboxGroup(nucPop.getNbObjects(), 1, nucIndex, values);
         gd.showDialog();            
@@ -238,6 +233,9 @@ private static double thinDiam;
         objVoxel.setValue(1);
         if(gd.wasCanceled())
             objVoxel = null;
+        flush_close(img);
+        imgObjNuc.closeImagePlus();
+        imgObjNucSelected.closeImagePlus();
         return(objVoxel);
     }
     
@@ -623,9 +621,7 @@ private static double thinDiam;
         ImageProcessor ip = img.getProcessor();
         ip.setFont(tagFont);
         ip.setColor(color);
-        String zPosMin = String.valueOf(Math.round(obj.getZmin()));
-        String zPosMax = String.valueOf(Math.round(obj.getZmax()));
-        ip.drawString(Integer.toString(number)+" ("+zPosMin+"-"+zPosMax+")", x, y);
+        ip.drawString(Integer.toString(number), x, y);
         img.updateAndDraw();    
     }
     

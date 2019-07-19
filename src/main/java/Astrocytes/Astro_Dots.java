@@ -1,12 +1,11 @@
 package Astrocytes;
 
 
-import static Tools.Astro_Dots_Tools.*;
+import static Astrocytes.Tools.Astro_Dots_Tools.*;
 
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Roi;
-import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.measure.Calibration;
 import ij.plugin.Duplicator;
@@ -100,7 +99,7 @@ public class Astro_Dots implements PlugIn {
             // Write headers for global results file
             FileWriter fileResults = new FileWriter(outDirResults + "AstroDots_" + inDir.getName() + ".xls", false);
             outPutResults = new BufferedWriter(fileResults);
-            outPutResults.write("ImageName\tRoi Name\tbg Intensity\tStd bg\tAstrocyte Volume\tDensity dots in Astro"
+            outPutResults.write("ImageName\tRoi Name\tbg Intensity\tAstrocyte Volume\tDensity dots in Astro"
                     + "\tPercentage of dots not in astro\tPercentage of dots in soma\tPercentage of dots in fine processes\tPercentage of dots in large processes"
                     + "\tDots mean intensity in Astro\tSD intensity in astro\tMean astro diameter(0 exluded)\tStd astro diameter(0 excluded)"
                     + "\tMed astro diameter(0 excluded)\n");
@@ -188,6 +187,8 @@ public class Astro_Dots implements PlugIn {
                         System.out.println("Opening Astrocyte channel : " + astroFile);
                         ImagePlus imgAstro = IJ.openImage(astroFile);
                         imgAstro.setCalibration(cal);
+                        // find background
+                        find_background(imgAstro);
                         
                         // Dots channel
                         chName = "_w" + ArrayUtils.indexOf(channels, ch.get(2)) + ch.get(2);

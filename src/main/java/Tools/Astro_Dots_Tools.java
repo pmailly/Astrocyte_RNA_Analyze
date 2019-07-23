@@ -151,7 +151,7 @@ private static double thinDiam;
      * Find Calibration intensity in template file
      * @param templateFile
      * @param type
-     * @return mean + std intensity
+     * @return mean
      * @throws java.io.IOException
      */
     
@@ -162,7 +162,6 @@ private static double thinDiam;
             meanInt[n] = rt.getValue(type, n);
         }
         DescriptiveStatistics stats = new DescriptiveStatistics(meanInt);
-        //return(stats.getMean() + stats.getStandardDeviation());
         return(stats.getMean());
     }
     
@@ -205,6 +204,9 @@ private static double thinDiam;
         img.updateAndDraw();
         ImagePlus[] imgColors = {imgObjNuc.getImagePlus(), imgObjNucSelected.getImagePlus(), null, img, null};
         ImagePlus imgObjects = new RGBStackMerge().mergeHyperstacks(imgColors, false);
+        int nucZCenter = (int)nucPop.getObject(nucSelected).getCenterZ();
+        imgObjects.setZ(nucZCenter+1);
+        imgObjects.updateAndDraw();
         imgObjects.show("Nucleus");
         NonBlockingGenericDialog gd = new NonBlockingGenericDialog("Astrocyte nucleus");
         gd.addMessage("Choose astrocyte nucleus");
@@ -243,7 +245,7 @@ private static double thinDiam;
     
     
     /**
-     * Threshold images and fill holes
+     * Threshold images, fill holes
      * @param img
      * @param thMed
      * @param fill 
@@ -354,7 +356,7 @@ private static double thinDiam;
     }
     
     /**
-     * Do Z prjection
+     * Do Z projection
      * @param img
      * @param projection parameter
      * @return 
@@ -388,6 +390,7 @@ private static double thinDiam;
     /**
     * Find background image intensity
     * find mean intensity outside astrocyte mask in astrocyte image
+    * don't take in account pixels with 0 value
     * return mean intensity
      * @param imgAstro
     */
@@ -504,6 +507,9 @@ private static double thinDiam;
     
     /**
      * Nucleus segmentation
+     * @param imgNucZCrop
+     * @param roiAstro
+     * @return image mask
      */
     public static ImagePlus segmentNucleus(ImagePlus imgNucZCrop, Roi roiAstro) {
         imgNucZCrop.deleteRoi();
@@ -520,6 +526,7 @@ private static double thinDiam;
         flush_close(imgNucZCrop);
         return(imgNucMask);    
     }
+    
     
     /**
      * Find astrocyte nucleus keep nucleus 
@@ -643,6 +650,7 @@ private static double thinDiam;
         IJ.showStatus("Computing watershed");
         Watershed3D water = new Watershed3D(edt16, seedsImg, 10, 1);
         ImagePlus imp = water.getWatershedImage3D().getImagePlus();
+        WindowManager.getWindow("Log").dispose();
         IJ.setThreshold(imp, 1, 65535);
         Prefs.blackBackground = false;
         IJ.run(imp, "Convert to Mask", "method=Default background=Dark");
@@ -783,10 +791,10 @@ private static double thinDiam;
             /* classify dots
             * 
             * dots 0 (red) not in astro : 
-            *   mean intensity dots <= astroIntThreshold 
+            *   mean intensity dots <= bgThresholdInt 
             *   dist to nucleus > 2
             * dots 1 (yellow) Thin processes :
-            *   mean intensity dots > astroIntThreshold, 
+            *   mean intensity dots > bgThresholdInt, 
             *   dist to nucleus > 2, 
             *   largeProcess = false
             * dots 2 (green) Large processes and in soma :
@@ -870,8 +878,7 @@ private static double thinDiam;
             }
             int Dottype = dotObj.getValue();
             double astroDiameter = dotObj.getPixMaxValue(ImageHandler.wrap(imgAstroMap)) * cal.pixelWidth;
-            if (astroDiameter != 0)
-                dotDiameterStats.addValue(astroDiameter);
+            dotDiameterStats.addValue(astroDiameter);
             switch (Dottype) {
                 case 0 :
                     if (dotVol >= meanSEMDotsSize) {
@@ -920,15 +927,11 @@ private static double thinDiam;
         double perDotsFineBr = 100*(dotsinFineBr / dotsinAstro);
         double perDotsLargeBr = 100*((dotsinLargeBr) / dotsinAstro);
         double meanIntDotsinAstro = dotMeanIntStats.getMean();
-        double sdIntDotsinAstro = dotMeanIntStats.getStandardDeviation();
         double meanAstroDiameter = dotDiameterStats.getMean();
-        double stdAstroDiameter = dotDiameterStats.getStandardDeviation();
-        double medAstroDiameter = dotDiameterStats.getPercentile(50); 
         results.write(imageName + "\t" + roiName + "("+(roiIndex+1)+"/"+totalRoi+")" + "\t" + bg + 
                 "\t" + astroVol + "\t" + dotsdensinAstro +
                 "\t" + percDotsNotinAstro + "\t" + percDotsinSoma + "\t" + perDotsFineBr + "\t" + perDotsLargeBr +
-                "\t" + meanIntDotsinAstro + "\t" + sdIntDotsinAstro + "\t"+meanAstroDiameter+"\t"+stdAstroDiameter+
-                "\t"+medAstroDiameter+"\n");
+                "\t" + meanIntDotsinAstro + "\t"+meanAstroDiameter+"\n");
         results.flush();
     }
     

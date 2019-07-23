@@ -1,28 +1,24 @@
 package Tools;
 
 import static Astrocytes.Astro_Dots.cal;
-import static Astrocytes.Astro_Dots.maxMacroDotsSize;
 import static Astrocytes.Astro_Dots.meanSEMDotsSize;
-import static Astrocytes.Astro_Dots.templateFile;
 import fiji.util.gui.GenericDialogPlus;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
 import ij.Prefs;
 import ij.WindowManager;
-import ij.gui.GenericDialog;
 import ij.gui.NonBlockingGenericDialog;
 import ij.gui.Roi;
-import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.measure.*;
 import ij.plugin.Duplicator;
 import ij.plugin.GaussianBlur3D;
+import ij.plugin.ImageCalculator;
 import ij.plugin.RGBStackMerge;
 import ij.plugin.Thresholder;
 import ij.plugin.ZProjector;
 import ij.plugin.filter.GaussianBlur;
-import ij.plugin.filter.ParticleAnalyzer;
 import ij.plugin.filter.RankFilters;
 import ij.process.ImageProcessor;
 import ij.process.ImageStatistics;
@@ -69,7 +65,6 @@ public class Astro_Dots_Tools {
 public static String thMethod = "";
 // Astrocyte channel background
 public static double bg = 0;
-public static double stdBg = 0;
 // if pureArn exclude no dots
 public static boolean pureArn = false;
 // ratio astro int / dots int for nucleus selection
@@ -92,14 +87,14 @@ private static double thinDiam;
         GenericDialogPlus gd = new GenericDialogPlus("Parameters");
         gd.addMessage("Channels", Font.getFont("Monospace"), Color.blue);
         gd.addChoice("DAPI : ", channels, channels[1]);
-        gd.addChoice("Astrocyte : ", channels, channels[2]);
+        gd.addChoice("IF : ", channels, channels[2]);
         gd.addChoice("Dots : ", channels, channels[3]);
-        gd.addMessage("Calibration template", Font.getFont("Monospace"), Color.blue);
-        gd.addFileField("Template file : ", templateFile);
+        //gd.addMessage("Calibration template", Font.getFont("Monospace"), Color.blue);
+        //gd.addFileField("Template file : ", templateFile);
         gd.addChoice("Dots Threshold Method", thMethods, thMethods[15]);
-        gd.addCheckbox(" Pure mRNA in astrocyte", pureArn);
-        gd.addCheckbox(" mRNA in nucleus", ratioInt);
-        gd.addNumericField("Macro dots max size :  : ", maxMacroDotsSize, 0);
+        gd.addCheckbox(" Specific mRNA", pureArn);
+        //gd.addCheckbox(" mRNA in nucleus", ratioInt);
+        //gd.addNumericField("Macro dots max size :  : ", maxMacroDotsSize, 0);
         if (showCal) {
             gd.addNumericField("XY pixel size : ", cal.pixelWidth, 3);
             gd.addNumericField("Z pixel size : ", 1, 3);
@@ -108,11 +103,11 @@ private static double thinDiam;
         ch.add(0, gd.getNextChoice());
         ch.add(1, gd.getNextChoice());
         ch.add(2, gd.getNextChoice());
-        templateFile = gd.getNextString();
+        //templateFile = gd.getNextString();
         thMethod = thMethods[gd.getNextChoiceIndex()];
         pureArn = gd.getNextBoolean();
-        ratioInt = gd.getNextBoolean(); 
-        maxMacroDotsSize = gd.getNextNumber();
+        //ratioInt = gd.getNextBoolean(); 
+        //maxMacroDotsSize = gd.getNextNumber();
         if (showCal) {
             cal.pixelWidth = gd.getNextNumber();
             cal.pixelDepth = gd.getNextNumber();
@@ -194,14 +189,15 @@ private static double thinDiam;
             values[i] = false;
             if (i == nucSelected) {
                 obj.draw(imgObjNucSelected);
-                labelsObject(obj, imgObjNucSelected.getImagePlus(), i, 255, 16);
+                labelsObject(obj, imgObjNucSelected.getImagePlus(), i, 255, 20);
                 values[i] = true;
             }
             else {
                 obj.draw(imgObjNuc);
-                labelsObject(obj, imgObjNuc.getImagePlus(), i, 255, 16);
+                labelsObject(obj, imgObjNuc.getImagePlus(), i, 255, 20);
             }
         }
+        
         IJ.run(imgObjNuc.getImagePlus(), "Enhance Contrast", "saturated=0.35");
         IJ.run(imgObjNucSelected.getImagePlus(), "Enhance Contrast", "saturated=0.35");
         img.setSlice(img.getNSlices()/2);
@@ -217,20 +213,24 @@ private static double thinDiam;
         Vector<?> checkboxes = gd.getCheckboxes();
         imgObjects.hide();
         flush_close(imgObjects);
-        
-        // if more than one object selected merge objects.
-        ArrayList<Object3D> objSelected = new ArrayList<>();
-
-        for (int n = 0; n < checkboxes.size(); n++) {
-            Checkbox nucCheck = (Checkbox) checkboxes.get(n);
-            if (nucCheck.getState()) {
-                objSelected.add(nucPop.getObject(n));
-                //System.out.println(n);
-            }
-        }
         Object3DVoxels objVoxel = new Object3DVoxels(imgObjNuc);
-        objVoxel.addVoxelsUnion(objSelected);
-        objVoxel.setValue(1);
+        // if one object
+        if (nucPop.getNbObjects() == 1) {
+            objVoxel = (Object3DVoxels)nucPop.getObject(0);
+        }
+        else {
+            ArrayList<Object3D> objSelected = new ArrayList<>();
+            for (int n = 0; n < checkboxes.size(); n++) {
+                Checkbox nucCheck = (Checkbox) checkboxes.get(n);
+                if (nucCheck.getState()) {
+                    objSelected.add(nucPop.getObject(n));
+                    //System.out.println(n);
+                }
+            }
+            // if more than one object selected merge objects.
+            objVoxel.addVoxelsUnion(objSelected);
+            objVoxel.setValue(1);
+        }
         if(gd.wasCanceled())
             objVoxel = null;
         flush_close(img);
@@ -247,12 +247,20 @@ private static double thinDiam;
      * @param img
      * @param thMed
      * @param fill 
+     * @param calculate 
      */
-    public static void threshold(ImagePlus img, String thMed, boolean fill) {
+    public static void threshold(ImagePlus img, String thMed, boolean fill, boolean calculate) {
         //  Threshold and binarize
+        img.setZ(find_max(img));
+        img.updateAndDraw();
         IJ.setAutoThreshold(img, thMed + " dark");
         Prefs.blackBackground = false;
-        IJ.run(img, "Convert to Mask", "method="+thMed+" background=Dark calculate");
+        String method;
+        if (calculate)
+            method = "method="+thMed+" background=Dark calculate";
+        else
+            method = "method="+thMed+" background=Dark";
+        IJ.run(img, "Convert to Mask", method);
         if (fill) {
             IJ.run(img,"Fill Holes", "stack");
         }
@@ -367,14 +375,55 @@ private static double thinDiam;
     * read mean intensity
     * @param img 
     */
-    public static void find_background(ImagePlus img) {
+    public static void find_backgroundProj(ImagePlus img) {
       img.deleteRoi();
       ImagePlus imgProj = doZProjection(img, ZProjector.MIN_METHOD);
       ImageProcessor imp = imgProj.getProcessor();
       bg = imp.getStatistics().mean;
-      stdBg = imp.getStatistics().stdDev;
-      System.out.println("Background =  " + bg + " +- " + stdBg);
+      System.out.println("Background =  " + bg);
       flush_close(imgProj);
+    }
+    
+    
+    /**
+    * Find background image intensity
+    * find mean intensity outside astrocyte mask in astrocyte image
+    * return mean intensity
+     * @param imgAstro
+    */
+    public static void find_background(ImagePlus imgAstro) {
+        ImagePlus img = new Duplicator().run(imgAstro, 3,imgAstro.getNSlices());
+        median_filter(img, 0.5);
+        ImagePlus imgMask = img.duplicate();
+        threshold(imgMask, "Li", false, true);
+        IJ.run(imgMask, "Invert", "stack");
+        ImageCalculator imgCal = new ImageCalculator();
+        ImagePlus img1 = imgCal.run("Multiply create stack", img, imgMask);
+        IJ.run(img1, "Divide...", "value=255 stack");
+        double sectionInt = 0;
+        for (int n = 1; n <= img1.getNSlices(); n++) {
+            double pixelInt = 0;
+            int voxelZero = 0;
+            img1.setZ(n);
+            ImageProcessor ip = img1.getProcessor();
+            for (int x = 0; x < img1.getHeight(); x++) {
+                for (int y = 0; y < img1.getWidth(); y++) {
+                    double voxelInt = ip.getPixelValue(x, y);
+                    if ( voxelInt > 0) {
+                        pixelInt += voxelInt;
+                    }
+                    else {
+                        voxelZero++;
+                    }
+                }
+            }
+            sectionInt += pixelInt/((img1.getHeight()*img1.getWidth()) - voxelZero);
+        } 
+        bg = sectionInt/img1.getNSlices();
+        System.out.println("Background = "+bg);
+        flush_close(img);
+        flush_close(imgMask);
+        flush_close(img1);
     }
     
    
@@ -460,7 +509,7 @@ private static double thinDiam;
         imgNucZCrop.deleteRoi();
         median_filter(imgNucZCrop, 4);
         IJ.run(imgNucZCrop, "Difference of Gaussians", "  sigma1=30 sigma2=28 stack");
-        threshold(imgNucZCrop, "Otsu", true);
+        threshold(imgNucZCrop, "Otsu", true, false);
         IJ.run(imgNucZCrop, "Options...", "iterations=5 count=1 do=Open stack");
         imgNucZCrop.setRoi(roiAstro);
         imgNucZCrop.updateAndDraw();
@@ -485,19 +534,21 @@ private static double thinDiam;
     public static int find_astroNuc( Objects3DPopulation nucPop, ImagePlus imgAstro, ImagePlus imgDots) {
         double maxRatioInt = 0;
         int index = 0;      
-        for (int o = 0; o < nucPop.getNbObjects(); o++) {
-            Object3D obj = nucPop.getObject(o);
-            double astroInt = obj.getPixMeanValue(ImageHandler.wrap(imgAstro));
-            double dotsInt = obj.getPixMeanValue(ImageHandler.wrap(imgDots));
-            double ratio;
-            if (ratioInt)
-                ratio = dotsInt/astroInt;
-            else
-                ratio = astroInt/dotsInt;
-            if (ratio > maxRatioInt) {
-                maxRatioInt = ratio;
-                index = o;
-            } 
+        if (nucPop.getNbObjects() > 1) {
+            for (int o = 0; o < nucPop.getNbObjects(); o++) {
+                Object3D obj = nucPop.getObject(o);
+                double astroInt = obj.getPixMeanValue(ImageHandler.wrap(imgAstro));
+                double dotsInt = obj.getPixMeanValue(ImageHandler.wrap(imgDots));
+                double ratio;
+                if (ratioInt)
+                    ratio = dotsInt/astroInt;
+                else
+                    ratio = astroInt/dotsInt;
+                if (ratio > maxRatioInt) {
+                    maxRatioInt = ratio;
+                    index = o;
+                } 
+            }   
         }
         return(index);
     }
@@ -510,7 +561,7 @@ private static double thinDiam;
     public static ImagePlus localThickness3D (ImagePlus imgAstro) {
         ImagePlus img = imgAstro.duplicate();
         img.setCalibration(cal);
-        threshold(img, "Li", false);
+        threshold(img, "Li", false, false);
         EDT_S1D edt = new EDT_S1D();
         edt.runSilent = true;
         edt.thresh = 1;
@@ -537,6 +588,29 @@ private static double thinDiam;
         flush_close(imgLocThk);
         return(astroMap);
     }
+    
+    
+    /**
+     * Find Z with max intensity in stack
+     * @param img
+     * @return z
+     */
+    
+    private static int find_max(ImagePlus img) {
+        double max = 0;
+        int zmax = 0;
+        for (int z = 1; z <= img.getNSlices(); z++) {
+            ImageProcessor ip = img.getStack().getProcessor(z);
+            ImageStatistics statistics = new ImageStatistics().getStatistics(ip, ImageStatistics.MEAN, img.getCalibration());
+            double meanInt = statistics.mean;
+            if (meanInt > max) {
+                max = meanInt;
+                zmax = z;
+            }
+        }
+        return(zmax);
+    }
+    
     
    /**
     * 3D watershed
@@ -592,7 +666,7 @@ private static double thinDiam;
         // substract bgDots 
         IJ.run(imp, "Subtract...", "value="+bgDots+" stack");
         IJ.run(imp, "Difference of Gaussians", "  sigma1=3 sigma2=1 stack");
-        threshold(imp, thMethod, false);   
+        threshold(imp, thMethod, false, true);   
         if (roi != null) {
             imp.setRoi(roi);
             IJ.run(imp, "Clear Outside", "stack");
@@ -696,9 +770,6 @@ private static double thinDiam;
     public static void classify_dots(Object3D nucObj, Objects3DPopulation dotsPop, ImagePlus imgAstro, ImagePlus imgAstroZcrop, ImagePlus astroMapZcrop, 
             double astroMeanStdInt, double bgMeanStdInt) {
         IJ.showStatus("Classify dots ....");
-        find_background(imgAstro);
-        double astroIntThreshold = astroMeanStdInt / bgMeanStdInt;
-        //double bgThresholdInt = bg + stdBg;
         double bgThresholdInt = bg;
         // if purearn exclude no dot
         // BgThresholdInt = -1
@@ -729,12 +800,12 @@ private static double thinDiam;
                 distNuc = dotObj.distBorderUnit(nucObj);
             boolean largeProcess = largeProcess(astroMapZcrop, dotObj);
             // dots 0
-            if (meanIntDotAstroimg <= (astroIntThreshold * bgThresholdInt) && distNuc > 2) {
+            if (meanIntDotAstroimg <= (bgThresholdInt) && distNuc > 2) {
                 dotObj.setValue(0);
             }
 
             // dots 1
-            else if (meanIntDotAstroimg > (astroIntThreshold * bgThresholdInt) && distNuc > 2 && !largeProcess) {
+            else if (meanIntDotAstroimg > (bgThresholdInt) && distNuc > 2 && !largeProcess) {
                 dotObj.setValue(1);
             }
             // dots 2
@@ -853,7 +924,7 @@ private static double thinDiam;
         double meanAstroDiameter = dotDiameterStats.getMean();
         double stdAstroDiameter = dotDiameterStats.getStandardDeviation();
         double medAstroDiameter = dotDiameterStats.getPercentile(50); 
-        results.write(imageName + "\t" + roiName + "("+(roiIndex+1)+"/"+totalRoi+")" + "\t" + bg + "\t" + stdBg + 
+        results.write(imageName + "\t" + roiName + "("+(roiIndex+1)+"/"+totalRoi+")" + "\t" + bg + 
                 "\t" + astroVol + "\t" + dotsdensinAstro +
                 "\t" + percDotsNotinAstro + "\t" + percDotsinSoma + "\t" + perDotsFineBr + "\t" + perDotsLargeBr +
                 "\t" + meanIntDotsinAstro + "\t" + sdIntDotsinAstro + "\t"+meanAstroDiameter+"\t"+stdAstroDiameter+

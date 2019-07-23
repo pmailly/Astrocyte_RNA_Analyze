@@ -1,8 +1,9 @@
 package Astrocytes;
 
 
-import static Astrocytes.Tools.Astro_Dots_Tools.*;
 
+
+import static Tools.Astro_Dots_Tools.*;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Roi;
@@ -63,7 +64,7 @@ public class Astro_Dots implements PlugIn {
     public static double maxMacroDotsSize = 2000;
     // mean volume of all dots without clusters
     public static double meanSEMDotsSize = 0;
-    // result buffer
+    // result buffermaxDotsSize
     private BufferedWriter outPutResults;
     // template file for calibration
     public static String templateFile;
@@ -101,8 +102,7 @@ public class Astro_Dots implements PlugIn {
             outPutResults = new BufferedWriter(fileResults);
             outPutResults.write("ImageName\tRoi Name\tbg Intensity\tAstrocyte Volume\tDensity dots in Astro"
                     + "\tPercentage of dots not in astro\tPercentage of dots in soma\tPercentage of dots in fine processes\tPercentage of dots in large processes"
-                    + "\tDots mean intensity in Astro\tSD intensity in astro\tMean astro diameter(0 exluded)\tStd astro diameter(0 excluded)"
-                    + "\tMed astro diameter(0 excluded)\n");
+                    + "\tDots mean intensity in Astro\tMean astro diameter\n");
             outPutResults.flush();
             
             // Write headers for dots parameters results file
@@ -153,17 +153,17 @@ public class Astro_Dots implements PlugIn {
                             // return the index for channels DAPI, Astro, Dots and ask for calibration if needed 
                             ch = dialog(channels, showCal);
                             
-                            if (ch == null || templateFile == null) {
-                                IJ.showStatus("No template file found !");
-                                return;
-                            }
+//                            if (ch == null || templateFile == null) {
+//                                IJ.showStatus("No template file found !");
+//                                return;
+//                            }
                             cal.setUnit("microns");
                             System.out.println("x/y cal = " +cal.pixelWidth+", z cal = " + cal.pixelDepth);
                         }
                         
                         // Find in calibration template astromeanInt and astrobgInt
-                        astroMeanIntTh = findCalibration(templateFile, "AstroMeanInt");
-                        astroMeanBg = findCalibration(templateFile, "BgMeanInt");
+                        //astroMeanIntTh = findCalibration(templateFile, "AstroMeanInt");
+                        //astroMeanBg = findCalibration(templateFile, "BgMeanInt");
                         
                         // find rois
                         RoiManager rm = new RoiManager(false);
@@ -187,6 +187,7 @@ public class Astro_Dots implements PlugIn {
                         System.out.println("Opening Astrocyte channel : " + astroFile);
                         ImagePlus imgAstro = IJ.openImage(astroFile);
                         imgAstro.setCalibration(cal);
+                        
                         // find background
                         find_background(imgAstro);
                         

@@ -66,10 +66,7 @@ public class Astro_Dots implements PlugIn {
     public static double meanSEMDotsSize = 0;
     // result buffermaxDotsSize
     private BufferedWriter outPutResults;
-    // template file for calibration
-    public static String templateFile;
-    // value from calibration template
-    private double astroMeanIntTh = 0, astroMeanBg = 0;
+    
     
     /**
      * 
@@ -102,7 +99,7 @@ public class Astro_Dots implements PlugIn {
             outPutResults = new BufferedWriter(fileResults);
             outPutResults.write("ImageName\tRoi Name\tbg Intensity\tAstrocyte Volume\tDensity dots in Astro"
                     + "\tPercentage of dots not in astro\tPercentage of dots in soma\tPercentage of dots in fine processes\tPercentage of dots in large processes"
-                    + "\tDots mean intensity in Astro\tMean astro diameter\n");
+                    + "\tDots mean intensity in Astro\tMean astro dot diameter\tAstro Mean Diameter\tAstro Std diameter\tAstro median diameter\tPercentage of dot in GFAP neg\n");
             outPutResults.flush();
             
             // Write headers for dots parameters results file
@@ -153,10 +150,10 @@ public class Astro_Dots implements PlugIn {
                             // return the index for channels DAPI, Astro, Dots and ask for calibration if needed 
                             ch = dialog(channels, showCal);
                             
-//                            if (ch == null || templateFile == null) {
-//                                IJ.showStatus("No template file found !");
-//                                return;
-//                            }
+                            if (ch == null) {
+                                IJ.showStatus("Plugin cancelled !!!");
+                                return;
+                            }
                             cal.setUnit("microns");
                             System.out.println("x/y cal = " +cal.pixelWidth+", z cal = " + cal.pixelDepth);
                         }
@@ -283,13 +280,13 @@ public class Astro_Dots implements PlugIn {
 
 
                                     // calculate parameters
-                                    classify_dots(nucAstro, dotsPop, imgAstro, imgAstroZCrop, imgAstroZCropMap, astroMeanIntTh, astroMeanBg);                              
-
+                                    double noAstroDot = classify_dots(nucAstro, dotsPop, imgAstro, imgAstroZCrop, imgAstroZCropMap);
                                     // draw objects
                                     tagsObjects(nucAstro, dotsPop, imgAstroZCrop, outDirResults, rootName, r);                               
 
                                     // write a global parameters table by image
-                                    compute_Image_parameters(roiAstro, r, rm.getCount(), imgAstroZCrop, imgAstroZCropMap, nucAstro, dotsPop, outPutResults, rootName);
+                                    compute_Image_parameters(roiAstro, r, rm.getCount(), imgAstroZCrop, imgAstroZCropMap, nucAstro, dotsPop, outPutResults,
+                                            rootName, noAstroDot);
                                     // write dots parameters
                                     computeDotsParams(imgAstroZCropMap, imgAstroZCrop, dotsPop, nucAstro, roiAstro.getName(), outPutDotsResults, rootName);
                                     flush_close(imgAstroZCrop);

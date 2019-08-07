@@ -10,6 +10,7 @@ import ij.Prefs;
 import ij.WindowManager;
 import ij.gui.NonBlockingGenericDialog;
 import ij.gui.Roi;
+import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.measure.*;
 import ij.plugin.Duplicator;
@@ -215,30 +216,31 @@ private static double thinDiam;
         Vector<?> checkboxes = gd.getCheckboxes();
         imgObjects.hide();
         flush_close(imgObjects);
-        Object3DVoxels objVoxel = new Object3DVoxels(imgObjNuc);
+        Object3D nucObj;
         // if one object
         if (nucPop.getNbObjects() == 1) {
-            objVoxel = (Object3DVoxels)nucPop.getObject(0);
+            nucObj = nucPop.getObject(0);
         }
         else {
             ArrayList<Object3D> objSelected = new ArrayList<>();
             for (int n = 0; n < checkboxes.size(); n++) {
                 Checkbox nucCheck = (Checkbox) checkboxes.get(n);
                 if (nucCheck.getState()) {
-                    objSelected.add(nucPop.getObject(n));
+                    objSelected.add(nucPop.getObject(n).getObject3DVoxels());
                     //System.out.println(n);
                 }
             }
-            // if more than one object selected merge objects.
+            Object3DVoxels objVoxel = new Object3DVoxels();
             objVoxel.addVoxelsUnion(objSelected);
-            objVoxel.setValue(1);
+            nucObj = objVoxel;
+            
         }
         if(gd.wasCanceled())
-            objVoxel = null;
+            nucObj = null;
         flush_close(img);
         imgObjNuc.closeImagePlus();
         imgObjNucSelected.closeImagePlus();
-        return(objVoxel);
+        return(nucObj);
     }
     
     
@@ -741,10 +743,10 @@ private static double thinDiam;
     public static void tagsObjects(Object3D nucObj, Objects3DPopulation dotsPop, ImagePlus img, String imgDir, String imgName, int roi) {  
         ImagePlus imAstro = img.duplicate();
         ImageHandler imgObjNuc = ImageHandler.wrap(imAstro).createSameDimensions();
-        nucObj.draw(imgObjNuc, 255);                        
-        ImageHandler imgObjDotsNotAstro = ImageHandler.wrap(imAstro).createSameDimensions();
-        ImageHandler imgObjDotsFineProcess = ImageHandler.wrap(imAstro).createSameDimensions();
-        ImageHandler imgObjDotsLargeProcess = ImageHandler.wrap(imAstro).createSameDimensions();
+        ImageHandler imgObjDotsNotAstro = imgObjNuc.duplicate();
+        ImageHandler imgObjDotsFineProcess = imgObjNuc.duplicate();
+        ImageHandler imgObjDotsLargeProcess = imgObjNuc.duplicate();
+        nucObj.draw(imgObjNuc, 255);
         for (int n = 0; n < dotsPop.getNbObjects(); n++) {
             Object3D obj = dotsPop.getObject(n);
             switch (obj.getValue()) {

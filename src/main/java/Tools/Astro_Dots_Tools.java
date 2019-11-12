@@ -73,7 +73,7 @@ public static boolean ratioInt = false;
 // value to subtract to dots image to remove shadow dots
 private static final double bgDots = 500;
 // min diameter of thin astrocyte process
-// should be never less than pixel resolution 
+// should be never less than voxel resolution 
 private static double thinDiam;
 // distance to nucleus border to define soma
 private static double somaDist = 2;
@@ -88,16 +88,19 @@ private static double somaDist = 2;
         ArrayList ch = new ArrayList();
         String[] thMethods = new Thresholder().methods;
         GenericDialogPlus gd = new GenericDialogPlus("Parameters");
+        gd.setInsets(0, 250, 0);
         gd.addMessage("Channels", Font.getFont("Monospace"), Color.blue);
         gd.addChoice("DAPI : ", channels, channels[1]);
         gd.addChoice("IF : ", channels, channels[2]);
         gd.addChoice("Dots : ", channels, channels[3]);
         //gd.addMessage("Calibration template", Font.getFont("Monospace"), Color.blue);
         //gd.addFileField("Template file : ", templateFile);
-        gd.addChoice("Dots Threshold Method", thMethods, thMethods[15]);
+        gd.addChoice("Dots Threshold Method : ", thMethods, thMethods[15]);
         gd.addCheckbox(" Specific mRNA", pureArn);
         gd.addNumericField("Distance to nucleus border to define soma : ", somaDist, 2);
-        gd.addNumericField("Astrocyte process min. diameter µm \n(should not be less than pixel resolution!) :", thinDiam, 3);
+        gd.addNumericField("Astrocyte process minimum diameter (µm) :", Math.max(cal.pixelDepth, cal.pixelWidth), 3);
+        gd.setInsets(-12, 0, 0);
+        gd.addMessage("(Should not be less than voxel resolution !!!)", Font.getFont("Monospace"), Color.red);
         //gd.addNumericField("Macro dots max size :  : ", maxMacroDotsSize, 0);
         if (showCal) {
             gd.addNumericField("XY pixel size : ", cal.pixelWidth, 3);
@@ -264,7 +267,7 @@ private static double somaDist = 2;
         img.updateAndDraw();
         IJ.setAutoThreshold(img, thMed + " dark");
         Prefs.blackBackground = false;
-        String method;
+        String method = "";
         if (calculate)
             method = "method="+thMed+" background=Dark calculate";
         else
@@ -543,7 +546,8 @@ private static double somaDist = 2;
     public static ImagePlus segmentNucleus(ImagePlus imgNucZCrop, Roi roiAstro) {
         imgNucZCrop.deleteRoi();
         median_filter(imgNucZCrop, 4);
-        IJ.run(imgNucZCrop, "Difference of Gaussians", "  sigma1=30 sigma2=28 stack");
+        IJ.run(imgNucZCrop, "Remove Outliers...", "radius=15 threshold=1 which=Bright stack");
+        IJ.run(imgNucZCrop, "Difference of Gaussians", "  sigma1=25 sigma2=20 enhance stack");
         threshold(imgNucZCrop, "Otsu", true, false);
         IJ.run(imgNucZCrop, "Options...", "iterations=5 count=1 do=Open stack");
         imgNucZCrop.setRoi(roiAstro);

@@ -73,9 +73,11 @@ public static boolean ratioInt = false;
 // value to subtract to dots image to remove shadow dots
 private static final double bgDots = 500;
 // min diameter of thin astrocyte process
+// should be never less than pixel resolution 
 private static double thinDiam;
-
-    
+// distance to nucleus border to define soma
+private static double somaDist = 2;
+        
     /**
      * Dialog ask for channels order and template file for calibration
      * @param channels
@@ -94,7 +96,8 @@ private static double thinDiam;
         //gd.addFileField("Template file : ", templateFile);
         gd.addChoice("Dots Threshold Method", thMethods, thMethods[15]);
         gd.addCheckbox(" Specific mRNA", pureArn);
-        //gd.addCheckbox(" mRNA in nucleus", ratioInt);
+        gd.addNumericField("Distance to nucleus border to define soma : ", somaDist, 2);
+        gd.addNumericField("Astrocyte process min. diameter µm \n(should not be less than pixel resolution!) :", thinDiam, 3);
         //gd.addNumericField("Macro dots max size :  : ", maxMacroDotsSize, 0);
         if (showCal) {
             gd.addNumericField("XY pixel size : ", cal.pixelWidth, 3);
@@ -107,6 +110,8 @@ private static double thinDiam;
         //templateFile = gd.getNextString();
         thMethod = thMethods[gd.getNextChoiceIndex()];
         pureArn = gd.getNextBoolean();
+        somaDist = gd.getNextNumber();
+        thinDiam = gd.getNextNumber();
         //ratioInt = gd.getNextBoolean(); 
         //maxMacroDotsSize = gd.getNextNumber();
         if (showCal) {
@@ -460,9 +465,13 @@ private static double thinDiam;
     public static boolean largeProcess(ImagePlus imgMap, Object3D dot) {
         ImageStack imgMapStack = imgMap.getImageStack();
         boolean diamOk = false;
-        // thin process diameter in pixel
-        // image map is in pixel
-        thinDiam = cal.pixelDepth / cal.pixelWidth;
+        // Test if thinDiam is => pixelSize
+        // Image map is in pixel
+        double pixelSize = Math.max(cal.pixelWidth, cal.pixelDepth);
+        if (thinDiam >= pixelSize)
+            thinDiam = thinDiam /cal.pixelWidth;
+        else
+            thinDiam = cal.pixelDepth / cal.pixelWidth;
         // Voxel with max intensity in image map
         double maxValue = dot.getPixMaxValue(ImageHandler.wrap(imgMap));
         Voxel3D VolxelMax = dot.getPixelMax(ImageHandler.wrap(imgMap));
@@ -792,8 +801,6 @@ private static double thinDiam;
      * @param imgAstro
     * @param imgAstroZcrop read dots intensity
     * @param astroMapZcrop
-     * @param noAstroDot
-
     **/
     public static double classify_dots(Object3D nucObj, Objects3DPopulation dotsPop, ImagePlus imgAstro, ImagePlus imgAstroZcrop, ImagePlus astroMapZcrop) {
         IJ.showStatus("Classify dots ....");
@@ -812,13 +819,13 @@ private static double thinDiam;
             * 
             * dots 0 (red) not in astro : 
             *   mean intensity dots <= bgThresholdInt 
-            *   dist to nucleus > 2
+            *   dist to nucleus > somaDist
             * dots 1 (yellow) Thin processes :
             *   mean intensity dots > bgThresholdInt, 
-            *   dist to nucleus > 2, 
+            *   dist to nucleus > somaDist, 
             *   largeProcess = false
             * dots 2 (green) Large processes and in soma :
-            *   dist to nucleus < 2
+            *   dist to nucleus < somaDist
             *   largeProcess = true
             */
             double distNuc = 0;
@@ -828,19 +835,19 @@ private static double thinDiam;
                 distNuc = dotObj.distBorderUnit(nucObj);
             boolean largeProcess = largeProcess(astroMapZcrop, dotObj);
             // dots 0
-            if (meanIntDotAstroimg <= bgThresholdInt && distNuc > 2) {
+            if (meanIntDotAstroimg <= bgThresholdInt && distNuc > somaDist) {
                 dotObj.setValue(0);
             }
 
             // dots 1
-            else if (meanIntDotAstroimg > bgThresholdInt && distNuc > 2 && !largeProcess) {
+            else if (meanIntDotAstroimg > bgThresholdInt && distNuc > somaDist && !largeProcess) {
                 dotObj.setValue(1);
             }
             // dots 2
-            else if (distNuc <= 2 || largeProcess) {
+            else if (distNuc <= somaDist || largeProcess) {
                 dotObj.setValue(2);
             }
-            if (pureArn && meanIntDotAstroimg <= -bgThresholdInt && distNuc > 2) 
+            if (pureArn && meanIntDotAstroimg <= -bgThresholdInt && distNuc > somaDist) 
                 noAstroDot++;
         }
         return(noAstroDot);
@@ -868,7 +875,7 @@ private static double thinDiam;
         * dotsNoinAstro (dots outiside astrocyte) = dots 0
         * totalDots (all dots) = dots0 + dots1 + dots2
         * dotsinAstro (dots in astrocyte) = largeBrDots + fineBrDots + dotsinSoma
-        * dotsinSoma (dots inside soma) = dots with dist to nucleus < 2
+        * dotsinSoma (dots inside soma) = dots with dist to nucleus < somaDist
         * dotsinNuc (dots in nucleus) = dots with dist = 0
         * dotsdensinAstro (dots density in astrocyte) = dotsinAstro / astroVolume
         * percDotsNotinAstro (% dots not in astrocyte = dotsNotinAstro / totalDots
@@ -930,7 +937,7 @@ private static double thinDiam;
                         break;
                     }
             }
-            if (distNuc < 2) 
+            if (distNuc < somaDist) 
                 if (dotVol >= meanSEMDotsSize) {
                     double ratioVol = Math.round(dotVol/meanSEMDotsSize);
                     dotsinSoma+=ratioVol;  

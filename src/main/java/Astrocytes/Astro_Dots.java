@@ -252,13 +252,13 @@ public class Astro_Dots implements PlugIn {
                                 ImagePlus imgDotsZCrop = new Duplicator().run(imgDots, zStart, zStop);
                                 
                                 Object3D nucAstro = null;
-                                // if more than one nucleus find nucleus with intensity in astrocyte channel
+                                // Find nucleus with intensity in astrocyte channel
                                 // and ask to choose
-                                //if (nucPop.getNbObjects() > 1) 
                                     nucAstro = nucleusSelect(imgAstroZCrop, imgDotsZCrop, nucPop);                                  
-                                //else
-                                //    nucAstro = nucPop.getObject(0);
+                                    
                                 if (nucAstro != null) {
+                                    
+                                    
                                     // compute distance map image
                                     ImagePlus imgAstroZCropMap = localThickness3D(imgAstroZCrop);
                                     imgAstroZCropMap.setCalibration(cal);
@@ -281,6 +281,7 @@ public class Astro_Dots implements PlugIn {
 
                                     // calculate parameters
                                     double noAstroDot = classify_dots(nucAstro, dotsPop, imgAstro, imgAstroZCrop, imgAstroZCropMap);
+                                    nucPop.updateNamesAndValues();
                                     // draw objects
                                     tagsObjects(nucAstro, dotsPop, imgAstroZCrop, outDirResults, rootName, r);                               
 

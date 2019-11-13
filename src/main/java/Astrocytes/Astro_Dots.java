@@ -7,6 +7,7 @@ import static Tools.Astro_Dots_Tools.*;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Roi;
+import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.measure.Calibration;
 import ij.plugin.Duplicator;
@@ -28,9 +29,12 @@ import loci.common.services.ServiceFactory;
 import loci.formats.FormatException;
 import loci.formats.meta.IMetadata;
 import loci.formats.services.OMEXMLService;
+import loci.plugins.BF;
+import loci.plugins.in.ImporterOptions;
 import loci.plugins.util.ImageProcessorReader;
 import mcib3d.geom.Object3D;
 import mcib3d.geom.Objects3DPopulation;
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.ArrayUtils;
 
 /*
@@ -55,8 +59,8 @@ public class Astro_Dots implements PlugIn {
     public static String outDirResults = "";
     public static Calibration cal = new Calibration();
     // Nucleus min and max filter volume
-    private final double minNucSize = 20;
-    private final double maxNucSize = 500;
+    public static double minNucSize = 10;
+    public static double maxNucSize = 500;
     // dots min and max filter volume
     public final double minDotsSize = 0.03;
     public final double maxDotsSize = 20;
@@ -119,26 +123,31 @@ public class Astro_Dots implements PlugIn {
             int imageNum = 0;
             ArrayList<String> ch = new ArrayList();
             for (int i = 0; i < imageFile.length; i++) {
-                // Find nd files
-                if (imageFile[i].endsWith(".nd")) {
-                    String imageName = inDir+ File.separator+imageFile[i];
-                    String rootName = imageFile[i].replace(".nd", "");
+                // For all ics or nd files
+                String fileExt = FilenameUtils.getExtension(imageFile[i]);
+                if ( ".ics".equals(fileExt) || ".nd".equals(fileExt)) {
+                    String imageName = FilenameUtils.getFullPath(imageFile[i]);
+                    String rootName = FilenameUtils.getBaseName(imageFile[i]);
                     // Find ROI file
                     String roi_file = imageDir+rootName+".zip";
                     if (!new File(roi_file).exists()) {
-                        IJ.showStatus("No ROI file found !");
+                        IJ.showStatus("No ROI file found !\nRoi file should be named as <nd or ics filename>.zip");
                         return;
                        }
                     else {
                         reader.setId(imageName);
                         int series = 0;
                         reader.setSeries(0);
+                        int sizeC = reader.getSizeC();
+                        String[] channels = new String[sizeC + 1];
+                        channels[0] = "None";
                         imageNum++;
                         boolean showCal = false;
-                        String channelNames = "None/"+meta.getImageName(0);
-                        String[] channels = channelNames.replace("_", "-").split("/");
-                        // Check calibration
                         if (imageNum == 1) {
+                            // Find channel names
+                            for (int n = 1; n < sizeC; n++)
+                                channels[n] = meta.getChannelExcitationWavelength(0, n).value().toString();
+                            // Check calibration
                             cal.pixelWidth = meta.getPixelsPhysicalSizeX(series).value().doubleValue();
                             cal.pixelHeight = cal.pixelWidth;
                             // problem to read calibration with nd files
@@ -158,43 +167,68 @@ public class Astro_Dots implements PlugIn {
                             System.out.println("x/y cal = " +cal.pixelWidth+", z cal = " + cal.pixelDepth);
                         }
                         
-                        // Find in calibration template astromeanInt and astrobgInt
-                        //astroMeanIntTh = findCalibration(templateFile, "AstroMeanInt");
-                        //astroMeanBg = findCalibration(templateFile, "BgMeanInt");
-                        
                         // find rois
                         RoiManager rm = new RoiManager(false);
                         rm.runCommand("Open", roi_file);
                         int index = 0;
+                        
+                        ImporterOptions options = new ImporterOptions();
+                        options.setColorMode(ImporterOptions.COLOR_MODE_GRAYSCALE);
+                        options.setId(imageName);
+                        options.setSplitChannels(true);
+                        reader.setSeries(0); 
+                        options.setQuiet(true);
                         
                         /**
                          * Open channels
                          */
                         
                         // Nucleus channel 
-                        String chName = "_w" + ArrayUtils.indexOf(channels, ch.get(0)) + ch.get(0);
-                        String dapiFile = inDir + File.separator + rootName + chName + ".TIF";
-                        System.out.println("Opening Nucleus channel : "+ dapiFile);
-                        ImagePlus imgNuc = IJ.openImage(dapiFile);
-                        imgNuc.setCalibration(cal);
+                        int channelIndex;
+                        ImagePlus imgNuc, imgAstro, imgDots;
                         
-                        // Astrocyte channel
-                        chName = "_w" + ArrayUtils.indexOf(channels, ch.get(1)) + ch.get(1);
-                        String astroFile = inDir + File.separator + rootName + chName + "_cmle.tif";
-                        System.out.println("Opening Astrocyte channel : " + astroFile);
-                        ImagePlus imgAstro = IJ.openImage(astroFile);
-                        imgAstro.setCalibration(cal);
+                        if (".ics".equals(fileExt)) {
+                            channelIndex = ArrayUtils.indexOf(channels, ch.get(0));
+                            System.out.println("Opening Nucleus channel : "+ rootName + "("+ch.get(0)+")");
+                            imgNuc = BF.openImagePlus(options)[channelIndex];
+
+                            // Astrocyte channel
+                            channelIndex = ArrayUtils.indexOf(channels, ch.get(1));
+                            System.out.println("Opening Astrocyte channel : " + rootName + "("+ch.get(1)+")");
+                            imgAstro = BF.openImagePlus(options)[channelIndex];
+
+                            
+
+                            // Dots channel
+                            channelIndex = ArrayUtils.indexOf(channels, ch.get(2));
+                            System.out.println("Opening Dots channel : " + rootName + "("+ch.get(2)+")");
+                            imgDots = BF.openImagePlus(options)[channelIndex];
+                        }
+                        else {
+                            // Nucleus channel
+                            String chName = "_w" + ArrayUtils.indexOf(channels, ch.get(0)) + ch.get(0);
+                            String dapiFile = inDir + File.separator + rootName + chName + ".TIF";
+                            System.out.println("Opening Nucleus channel : "+ dapiFile);
+                            imgNuc = IJ.openImage(dapiFile);
+                            imgNuc.setCalibration(cal);
+                        
+                            // Astrocyte channel
+                            chName = "_w" + ArrayUtils.indexOf(channels, ch.get(1)) + ch.get(1);
+                            String astroFile = inDir + File.separator + rootName + chName + "_cmle.tif";
+                            System.out.println("Opening Astrocyte channel : " + astroFile);
+                            imgAstro = IJ.openImage(astroFile);
+                            imgAstro.setCalibration(cal);
+
+                            // Dots channel
+                            chName = "_w" + ArrayUtils.indexOf(channels, ch.get(2)) + ch.get(2);
+                            String dotsFile = inDir + File.separator + rootName + chName + "_cmle.tif";
+                            System.out.println("Opening Dots channel : " + dotsFile);
+                            imgDots = IJ.openImage(dotsFile);
+                            imgDots.setCalibration(cal);
+                        }
                         
                         // find background
                         find_background(imgAstro);
-                        
-                        // Dots channel
-                        chName = "_w" + ArrayUtils.indexOf(channels, ch.get(2)) + ch.get(2);
-                        String dotsFile = inDir + File.separator + rootName + chName + "_cmle.tif";
-                        System.out.println("Opening Dots channel : " + dotsFile);
-                        ImagePlus imgDots = IJ.openImage(dotsFile);
-                        imgDots.setCalibration(cal);
-                        
                         // for each roi open image and crop
                         for (int r = 0; r < rm.getCount(); r++) {
                             index++;                            
@@ -261,11 +295,15 @@ public class Astro_Dots implements PlugIn {
                                     
                                     // compute distance map image
                                     ImagePlus imgAstroZCropMap = localThickness3D(imgAstroZCrop);
-                                    imgAstroZCropMap.setCalibration(cal);
-                                    IJ.run(imgAstroZCropMap, "Fire", "");
-                                    FileSaver astroMapFile = new FileSaver(imgAstroZCropMap);
+                                    ImagePlus imgAstroZMap = imgAstroZCropMap.duplicate();
+                                    imgAstroZMap.show();
+                                    IJ.run(imgAstroZMap, "Enhance Contrast...", "saturated=0.3 process_all");
+                                    IJ.run(imgAstroZMap, "Fire", "");
+                                    IJ.run(imgAstroZMap, "Calibration Bar...", "location=[Upper Left] fill=White label=Black number=5 decimal=3 font=12 zoom=1 overlay show");
+                                    FileSaver astroMapFile = new FileSaver(imgAstroZMap);
                                     astroMapFile.saveAsTiff(outDirResults + rootName + "_Roi"+ (r+1) + "_Map.tif");
-
+                                    imgAstroZMap.close();
+                                    
                                     // Find dots population
                                     Objects3DPopulation dotsPop = find_dots(imgDotsZCrop, roiAstro, thMethod);
                                     System.out.println("Dots number = "+dotsPop.getNbObjects());

@@ -103,11 +103,13 @@ private static double somaDist = 2;
         gd.addMessage("Astrocytes parameters", Font.getFont("Monospace"), Color.blue);
         gd.addNumericField("Distance to nucleus border to define soma : ", somaDist, 2);
         gd.addNumericField("Astrocyte process minimum diameter (µm) :", Math.max(cal.pixelDepth, cal.pixelWidth), 3);
+        gd.setInsets(-12, 0, 0);
+        gd.addMessage("(Should not be less than voxel resolution !!!)", Font.getFont("Monospace"), Color.red);
         gd.setInsets(20, 100, 0);
         gd.addMessage("Dots parameters", Font.getFont("Monospace"), Color.blue);
         gd.addChoice("Dots Threshold Method : ", thMethods, thMethods[15]);
-        gd.setInsets(8, 120, 0);
-        gd.addCheckbox("  Pur astrocyte mRNA", pureArn);
+        gd.setInsets(2, 265, 0);
+        gd.addCheckbox(" Specific mRNA", pureArn);
         
         if (showCal) {
             gd.addNumericField("XY pixel size : ", cal.pixelWidth, 3);

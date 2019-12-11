@@ -1,9 +1,9 @@
-package Astrocytes;
+package Astro_Dot;
 
 
 
 
-import static Tools.Astro_Dots_Tools.*;
+import static Tools.Astro_Dot_Tools.*;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Roi;
@@ -50,7 +50,7 @@ import org.apache.commons.lang.ArrayUtils;
 
 
 
-public class Astro_Dots implements PlugIn {
+public class Astro_Dot implements PlugIn {
     
     // Image directory
     public static String imageDir;
@@ -60,7 +60,7 @@ public class Astro_Dots implements PlugIn {
     public static Calibration cal = new Calibration();
     // Nucleus min and max filter volume
     public static double minNucSize = 10;
-    public static double maxNucSize = 500;
+    public static double maxNucSize = 100;
     // dots min and max filter volume
     public final double minDotsSize = 0.03;
     public final double maxDotsSize = 20;
@@ -99,15 +99,15 @@ public class Astro_Dots implements PlugIn {
                 outDir.mkdir();
             }
             // Write headers for global results file
-            FileWriter fileResults = new FileWriter(outDirResults + "AstroDots_" + inDir.getName() + ".xls", false);
+            FileWriter fileResults = new FileWriter(outDirResults + "AstroDot_" + inDir.getName() + ".xls", false);
             outPutResults = new BufferedWriter(fileResults);
             outPutResults.write("ImageName\tRoi Name\tbg Intensity\tAstrocyte Volume\tDensity dots in Astro"
                     + "\tPercentage of dots not in astro\tPercentage of dots in soma\tPercentage of dots in fine processes\tPercentage of dots in large processes"
-                    + "\tDots mean intensity in Astro\tMean astro dot diameter\tAstro Mean Diameter\tAstro Std diameter\tAstro median diameter\tPercentage of dot in GFAP neg\n");
+                    + "\tDots mean intensity in Astro\tMean process diameter\tPercentage of dot in GFAP neg\n");
             outPutResults.flush();
             
             // Write headers for dots parameters results file
-            FileWriter fileDotsResults = new FileWriter(outDirResults + "AstroDotsPop_" + inDir.getName() + ".xls", false);
+            FileWriter fileDotsResults = new FileWriter(outDirResults + "AstroDotPop_" + inDir.getName() + ".xls", false);
             BufferedWriter outPutDotsResults = new BufferedWriter(fileDotsResults);
             outPutDotsResults.write("rootName\tRoi Name\t#dots\tDot type\tdot volume\tDot Mean Int.\tAstro diameter\tDistance to nucleus\n");
             outPutDotsResults.flush();
@@ -125,28 +125,35 @@ public class Astro_Dots implements PlugIn {
             for (int i = 0; i < imageFile.length; i++) {
                 // For all ics or nd files
                 String fileExt = FilenameUtils.getExtension(imageFile[i]);
-                if ( ".ics".equals(fileExt) || ".nd".equals(fileExt)) {
-                    String imageName = FilenameUtils.getFullPath(imageFile[i]);
+                if ( "ics".equals(fileExt) || "nd".equals(fileExt)) {
+                    String imageName = imageDir + imageFile[i];
                     String rootName = FilenameUtils.getBaseName(imageFile[i]);
                     // Find ROI file
                     String roi_file = imageDir+rootName+".zip";
                     if (!new File(roi_file).exists()) {
-                        IJ.showStatus("No ROI file found !\nRoi file should be named as <nd or ics filename>.zip");
+                        IJ.showMessage("No ROI file found !\nRoi file should be named as <nd or ics filename>.zip");
                         return;
                        }
                     else {
                         reader.setId(imageName);
                         int series = 0;
-                        reader.setSeries(0);
+                        reader.setSeries(series);
                         int sizeC = reader.getSizeC();
-                        String[] channels = new String[sizeC + 1];
-                        channels[0] = "None";
                         imageNum++;
                         boolean showCal = false;
+                        String[] channels = new String[sizeC+1];
                         if (imageNum == 1) {
                             // Find channel names
-                            for (int n = 1; n < sizeC; n++)
-                                channels[n] = meta.getChannelExcitationWavelength(0, n).value().toString();
+                            if ("ics".equals(fileExt)) {
+                                channels[0] = "None";
+                                for (int n = 1; n < sizeC; n++) {
+                                    channels[n] = meta.getChannelExcitationWavelength(series, n).value().toString();
+                                }
+                            }
+                            else {
+                                String channelNames = "None/"+meta.getImageName(0).replace("CSU_", "");
+                                channels = channelNames.split("/");
+                            }
                             // Check calibration
                             cal.pixelWidth = meta.getPixelsPhysicalSizeX(series).value().doubleValue();
                             cal.pixelHeight = cal.pixelWidth;
@@ -186,8 +193,8 @@ public class Astro_Dots implements PlugIn {
                         // Nucleus channel 
                         int channelIndex;
                         ImagePlus imgNuc, imgAstro, imgDots;
-                        
-                        if (".ics".equals(fileExt)) {
+                        // Huygens ICS files
+                        if ("ics".equals(fileExt)) {
                             channelIndex = ArrayUtils.indexOf(channels, ch.get(0));
                             System.out.println("Opening Nucleus channel : "+ rootName + "("+ch.get(0)+")");
                             imgNuc = BF.openImagePlus(options)[channelIndex];
@@ -204,23 +211,24 @@ public class Astro_Dots implements PlugIn {
                             System.out.println("Opening Dots channel : " + rootName + "("+ch.get(2)+")");
                             imgDots = BF.openImagePlus(options)[channelIndex];
                         }
+                        // Huygens cmle tif files
                         else {
                             // Nucleus channel
-                            String chName = "_w" + ArrayUtils.indexOf(channels, ch.get(0)) + ch.get(0);
+                            String chName = "_w" + ArrayUtils.indexOf(channels, ch.get(0)) + "CSU-" + ch.get(0) ;
                             String dapiFile = inDir + File.separator + rootName + chName + ".TIF";
                             System.out.println("Opening Nucleus channel : "+ dapiFile);
                             imgNuc = IJ.openImage(dapiFile);
                             imgNuc.setCalibration(cal);
                         
                             // Astrocyte channel
-                            chName = "_w" + ArrayUtils.indexOf(channels, ch.get(1)) + ch.get(1);
+                            chName = "_w" + ArrayUtils.indexOf(channels, ch.get(1)) + "CSU-" + ch.get(1);
                             String astroFile = inDir + File.separator + rootName + chName + "_cmle.tif";
                             System.out.println("Opening Astrocyte channel : " + astroFile);
                             imgAstro = IJ.openImage(astroFile);
                             imgAstro.setCalibration(cal);
 
                             // Dots channel
-                            chName = "_w" + ArrayUtils.indexOf(channels, ch.get(2)) + ch.get(2);
+                            chName = "_w" + ArrayUtils.indexOf(channels, ch.get(2)) + "CSU-" + ch.get(2);
                             String dotsFile = inDir + File.separator + rootName + chName + "_cmle.tif";
                             System.out.println("Opening Dots channel : " + dotsFile);
                             imgDots = IJ.openImage(dotsFile);
@@ -291,15 +299,13 @@ public class Astro_Dots implements PlugIn {
                                     nucAstro = nucleusSelect(imgAstroZCrop, imgDotsZCrop, nucPop);                                  
                                     
                                 if (nucAstro != null) {
-                                    
-                                    
                                     // compute distance map image
                                     ImagePlus imgAstroZCropMap = localThickness3D(imgAstroZCrop);
                                     ImagePlus imgAstroZMap = imgAstroZCropMap.duplicate();
-                                    imgAstroZMap.show();
-                                    IJ.run(imgAstroZMap, "Enhance Contrast...", "saturated=0.3 process_all");
+                                    IJ.run(imgAstroZMap, "Enhance Contrast...", "saturated=0.3");
                                     IJ.run(imgAstroZMap, "Fire", "");
-                                    IJ.run(imgAstroZMap, "Calibration Bar...", "location=[Upper Left] fill=White label=Black number=5 decimal=3 font=12 zoom=1 overlay show");
+                                    IJ.resetMinAndMax(imgAstroZMap);
+                                    IJ.run(imgAstroZMap, "Calibration Bar...", "location=[Upper Left] fill=White label=Black number=5 decimal=2 font=12 zoom=1 overlay show");
                                     FileSaver astroMapFile = new FileSaver(imgAstroZMap);
                                     astroMapFile.saveAsTiff(outDirResults + rootName + "_Roi"+ (r+1) + "_Map.tif");
                                     imgAstroZMap.close();
@@ -349,7 +355,7 @@ public class Astro_Dots implements PlugIn {
             outPutDotsResults.close();
         }
         catch (IOException | FormatException | DependencyException | ServiceException ex) {
-            Logger.getLogger(Astro_Dots.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(Astro_Dot.class.getName()).log(Level.SEVERE, null, ex);
         }
         IJ.showStatus("Process done ...");
     }

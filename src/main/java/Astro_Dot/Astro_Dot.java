@@ -143,17 +143,18 @@ public class Astro_Dot implements PlugIn {
                         boolean showCal = false;
                         String[] channels = new String[sizeC+1];
                         if (imageNum == 1) {
-                            // Find channel names
+                            // Find channels name
+                            String channelNames = "None/";
                             if ("ics".equals(fileExt)) {
                                 channels[0] = "None";
-                                for (int n = 1; n < sizeC; n++) {
-                                    channels[n] = meta.getChannelExcitationWavelength(series, n).value().toString();
+                                for (int n = 0; n < sizeC; n++) {
+                                    channelNames += meta.getChannelExcitationWavelength(series, n).value().toString().replace(".0", "/");
                                 }
                             }
                             else {
-                                String channelNames = "None/"+meta.getImageName(0).replace("CSU_", "");
-                                channels = channelNames.split("/");
+                                channelNames += meta.getImageName(0).replace("CSU_", "");
                             }
+                            channels = channelNames.split("/");
                             // Check calibration
                             cal.pixelWidth = meta.getPixelsPhysicalSizeX(series).value().doubleValue();
                             cal.pixelHeight = cal.pixelWidth;
@@ -264,8 +265,8 @@ public class Astro_Dot implements PlugIn {
                             roiAstro.setLocation(0, 0);
                             imgNucZCrop.updateAndDraw();
                             roiAstro = imgNucZCrop.getRoi();
-                            ImagePlus imgNucSeg = segmentNucleus(imgNucZCrop, roiAstro);
-                            
+                            //ImagePlus imgNucSeg = segmentNucleus(imgNucZCrop, roiAstro);
+                            ImagePlus imgNucSeg = segmentNucleus2(imgNucZCrop, roiAstro);
                             // WaterShed slipt
                             ImagePlus imgNucSplit = watershedSplit(imgNucSeg, 10);
                             imgNucSplit.setCalibration(cal);

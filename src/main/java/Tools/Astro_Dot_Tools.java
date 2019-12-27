@@ -12,6 +12,7 @@ import ij.Prefs;
 import ij.WindowManager;
 import ij.gui.NonBlockingGenericDialog;
 import ij.gui.Roi;
+import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.measure.*;
 import ij.plugin.Duplicator;
@@ -79,6 +80,9 @@ private static final double bgDots = 500;
 private static double thinDiam;
 // distance to nucleus border to define soma
 private static double somaDist = 2;
+// nucleus dots size micron
+private static double nucDotSize = 2;
+private static double nucSph = 0.3;
         
     /**
      * Dialog ask for channels order and template file for calibration
@@ -102,9 +106,9 @@ private static double somaDist = 2;
         gd.setInsets(16, 100, 0);
         gd.addMessage("Astrocytes parameters", Font.getFont("Monospace"), Color.blue);
         gd.addNumericField("Distance to the border of the nucleus (µm) :", somaDist, 2);
-        gd.setInsets(-12, 0, 0);
-        gd.addMessage("     (to define the soma)");
-        gd.addNumericField("   Astrocyte process minimum diameter (µm) :", Math.max(cal.pixelDepth, cal.pixelWidth), 3);
+        gd.setInsets(-10, 4, 0);
+        gd.addMessage("(to define the soma)");
+        gd.addNumericField("Astrocyte process minimum diameter (µm)    :", Math.max(cal.pixelDepth, cal.pixelWidth), 3);
         gd.setInsets(-12, 0, 0);
         gd.addMessage("(Should not be less than voxel resolution !!!)", Font.getFont("Monospace"), Color.red);
         gd.setInsets(20, 100, 0);
@@ -356,7 +360,6 @@ private static double somaDist = 2;
                 remove = false;
                 obj = objects.getObject(n);
                 double vol = obj.getVolumeUnit();
-                //System.out.println(vol);
                 // remove if touching border
                 if (border) {
                     if (obj.touchBorders(imh, false)) {
@@ -448,6 +451,8 @@ private static double somaDist = 2;
         flush_close(imgMask);
         flush_close(img1);
     }
+    
+    
     
    /**
     * Find statistics diameter in distance map image
@@ -546,6 +551,47 @@ private static double somaDist = 2;
         return(volume);
     }
     
+    /**
+     * Nucleus segmentation 2
+     * @param imgNucZCrop
+     * @param roiAstro
+     * @return imgNucMask
+     */
+    public static Objects3DPopulation segmentNucleus2(ImagePlus imgNucZCrop, Roi roiAstro) {
+        imgNucZCrop.deleteRoi();
+        ImagePlus img = imgNucZCrop.duplicate();
+        double dotSize = nucDotSize/imgNucZCrop.getCalibration().pixelWidth;
+        IJ.run(img, "Subtract Background...", "rolling=150 stack");
+        IJ.run(img, "Remove Outliers...", "radius="+dotSize+" threshold=1 which=Bright stack");
+        ImageStack stack = new ImageStack(imgNucZCrop.getWidth(), imgNucZCrop.getHeight());
+        for (int i = 1; i <= img.getStackSize(); i++) {
+            img.setZ(i);
+            img.updateAndDraw();
+            IJ.run(img, "Nuceli Outline", "blur=15 blur2=20 threshold_method=Triangle outlier_radius=10 outlier_threshold=15 max_nucleus_size=200 "
+                    + "min_nucleus_size=10 erosion=5 expansion_inner=5 expansion=5 results_overlay");
+            img.setZ(1);
+            img.updateAndDraw();
+            ImagePlus mask = new ImagePlus("mask", img.createRoiMask().getBufferedImage());
+            ImageProcessor ip =  mask.getProcessor();
+            ip.invertLut();
+            for (int n = 0; n < 3; n++) 
+                ip.erode();
+            stack.addSlice(ip);
+        }
+	ImagePlus imgStack = new ImagePlus("Nucleus", stack);
+        ImagePlus imgWater = WatershedSplit(imgStack, 5);
+        flush_close(imgStack);
+        imgWater.setCalibration(imgNucZCrop.getCalibration());
+        imgWater.setRoi(roiAstro);
+        imgWater.updateAndDraw();
+        IJ.setBackgroundColor(0, 0, 0);
+        IJ.run(imgWater, "Clear Outside", "stack");
+        Objects3DPopulation cellPop = new Objects3DPopulation(imgWater);
+        cellPop.removeObjectsTouchingBorders(imgWater, false);
+        flush_close(imgWater);
+        return(cellPop);  
+    }
+    
     
     /**
      * Nucleus segmentation
@@ -556,7 +602,8 @@ private static double somaDist = 2;
     public static ImagePlus segmentNucleus(ImagePlus imgNucZCrop, Roi roiAstro) {
         imgNucZCrop.deleteRoi();
         median_filter(imgNucZCrop, 4);
-        IJ.run(imgNucZCrop, "Remove Outliers...", "radius=15 threshold=1 which=Bright stack");
+        double dotSize = nucDotSize/imgNucZCrop.getCalibration().pixelWidth;
+        IJ.run(imgNucZCrop, "Remove Outliers...", "radius="+dotSize+" threshold=1 which=Bright stack");
         IJ.run(imgNucZCrop, "Difference of Gaussians", "  sigma1=25 sigma2=20 stack");
         threshold(imgNucZCrop, "Otsu", true, false);
         IJ.run(imgNucZCrop, "Options...", "iterations=5 count=1 do=Open stack");
@@ -671,41 +718,29 @@ private static double somaDist = 2;
     * @param rad
     * @return distance map image
     */
-    public static ImagePlus watershedSplit(ImagePlus imgBinmask, int rad) {
-        int nbCpus = ThreadUtil.getNbCpus();
+    private static ImagePlus WatershedSplit(ImagePlus binaryMask, float rad) {
         float resXY = 1;
         float resZ = 1;
         float radXY = rad;
         float radZ = rad;
+        Calibration cal = binaryMask.getCalibration();
         if (cal != null) {
             resXY = (float) cal.pixelWidth;
             resZ = (float) cal.pixelDepth;
             radZ = radXY * (resXY / resZ);
         }
-        IJ.showStatus("Computing EDT");
-        ImageInt imgMask = ImageInt.wrap(imgBinmask);
-        ImageFloat edt = EDT.run(imgMask, 1, resXY, resZ, false, nbCpus);
+        ImageInt imgMask = ImageInt.wrap(binaryMask);
+        ImageFloat edt = EDT.run(imgMask, 0, resXY, resZ, false, 0);
         ImageHandler edt16 = edt.convertToShort(true);
         ImagePlus edt16Plus = edt16.getImagePlus();
-        GaussianBlur3D.blur(edt16Plus, 6.0, 6.0, 6.0);
+        GaussianBlur3D.blur(edt16Plus, 2.0, 2.0, 2.0);
         edt16 = ImageInt.wrap(edt16Plus);
         edt16.intersectMask(imgMask);
         // seeds
-        ImageHandler seedsImg;
-        seedsImg = FastFilters3D.filterImage(edt16, FastFilters3D.MAXLOCAL, radXY, radXY, radZ, 0, false);
-        IJ.showStatus("Computing watershed");
-        Watershed3D water = new Watershed3D(edt16, seedsImg, 10, 1);
-        ImagePlus imp = water.getWatershedImage3D().getImagePlus();
-        WindowManager.getWindow("Log").dispose();
-        IJ.setThreshold(imp, 1, 65535);
-        Prefs.blackBackground = false;
-        IJ.run(imp, "Convert to Mask", "method=Default background=Dark");
-        flush_close(imgMask.getImagePlus());
-        flush_close(edt.getImagePlus());
-        flush_close(edt16.getImagePlus());
-        flush_close(edt16Plus);
-        flush_close(seedsImg.getImagePlus());
-        return(imp);
+        ImageHandler seedsImg = FastFilters3D.filterImage(edt16, FastFilters3D.MAXLOCAL, radXY, radXY, radZ, 0, false);
+        Watershed3D water = new Watershed3D(edt16, seedsImg, 0, 0);
+        water.setLabelSeeds(true);
+        return(water.getWatershedImage3D().getImagePlus());
     }
     
     /**

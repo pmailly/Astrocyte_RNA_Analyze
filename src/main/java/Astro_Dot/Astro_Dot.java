@@ -7,7 +7,6 @@ import static Tools.Astro_Dot_Tools.*;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Roi;
-import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.measure.Calibration;
 import ij.plugin.Duplicator;
@@ -59,8 +58,8 @@ public class Astro_Dot implements PlugIn {
     public static String outDirResults = "";
     public static Calibration cal = new Calibration();
     // Nucleus min and max filter volume
-    public static double minNucSize = 10;
-    public static double maxNucSize = 100;
+    public static double minNucSize = 50;
+    public static double maxNucSize = 800;
     // dots min and max filter volume
     public final double minDotsSize = 0.03;
     public final double maxDotsSize = 20;
@@ -196,19 +195,17 @@ public class Astro_Dot implements PlugIn {
                         ImagePlus imgNuc, imgAstro, imgDots;
                         // Huygens ICS files
                         if ("ics".equals(fileExt)) {
-                            channelIndex = ArrayUtils.indexOf(channels, ch.get(0));
+                            channelIndex = ArrayUtils.indexOf(channels, ch.get(0)) -1 ;
                             System.out.println("Opening Nucleus channel : "+ rootName + "("+ch.get(0)+")");
                             imgNuc = BF.openImagePlus(options)[channelIndex];
-
+                            
                             // Astrocyte channel
-                            channelIndex = ArrayUtils.indexOf(channels, ch.get(1));
+                            channelIndex = ArrayUtils.indexOf(channels, ch.get(1)) - 1;
                             System.out.println("Opening Astrocyte channel : " + rootName + "("+ch.get(1)+")");
                             imgAstro = BF.openImagePlus(options)[channelIndex];
 
-                            
-
                             // Dots channel
-                            channelIndex = ArrayUtils.indexOf(channels, ch.get(2));
+                            channelIndex = ArrayUtils.indexOf(channels, ch.get(2)) - 1;
                             System.out.println("Opening Dots channel : " + rootName + "("+ch.get(2)+")");
                             imgDots = BF.openImagePlus(options)[channelIndex];
                         }
@@ -265,21 +262,29 @@ public class Astro_Dot implements PlugIn {
                             roiAstro.setLocation(0, 0);
                             imgNucZCrop.updateAndDraw();
                             roiAstro = imgNucZCrop.getRoi();
-                            //ImagePlus imgNucSeg = segmentNucleus(imgNucZCrop, roiAstro);
-                            ImagePlus imgNucSeg = segmentNucleus2(imgNucZCrop, roiAstro);
-                            // WaterShed slipt
-                            ImagePlus imgNucSplit = watershedSplit(imgNucSeg, 10);
-                            imgNucSplit.setCalibration(cal);
-                            IJ.run(imgNucSplit, "Fill Holes", "stack");
                             
+//                            ImagePlus imgNucSeg = segmentNucleus(imgNucZCrop, roiAstro);
+//                            // WaterShed slipt
+//                            ImagePlus imgNucSplit = watershedSplit(imgNucSeg, 10);
+//                            imgNucSplit.setCalibration(cal);
+//                            IJ.run(imgNucSplit, "Fill Holes", "stack");
+                            
+//                            // find nucleus population
+//                            Objects3DPopulation nucPop = getPopFromImage(imgNucSplit);
+//                            System.out.println("Roi = "+index+" of " + rm.getCount());
+//                            System.out.println("Nucleus number = "+nucPop.getNbObjects());
+//                            objectsSizeFilter(minNucSize, maxNucSize, nucPop, imgNucSplit, true);
+//                            System.out.println("After size filter Nucleus number = "+nucPop.getNbObjects());
+//                            flush_close(imgNucSeg);
+//                            flush_close(imgNucSplit);
+
                             // find nucleus population
-                            Objects3DPopulation nucPop = getPopFromImage(imgNucSplit);
+                            Objects3DPopulation nucPop = segmentNucleus2(imgNucZCrop, roiAstro);
                             System.out.println("Roi = "+index+" of " + rm.getCount());
                             System.out.println("Nucleus number = "+nucPop.getNbObjects());
-                            objectsSizeFilter(minNucSize, maxNucSize, nucPop, imgNucSplit, true);
+                            objectsSizeFilter(minNucSize, maxNucSize, nucPop, imgNucZCrop, true);
                             System.out.println("After size filter Nucleus number = "+nucPop.getNbObjects());
-                            flush_close(imgNucSeg);
-                            flush_close(imgNucSplit);
+                            flush_close(imgNucZCrop);
                             
                             if (nucPop.getNbObjects() != 0) {      
                                 // astro channel  

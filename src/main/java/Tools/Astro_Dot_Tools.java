@@ -489,7 +489,7 @@ private static double nucSph = 0.3;
         if (thinDiam >= pixelSize)
             thinDiam = thinDiam /cal.pixelWidth;
         else
-            thinDiam = cal.pixelDepth / cal.pixelWidth;
+            thinDiam =pixelSize / cal.pixelWidth;
         // Voxel with max intensity in image map
         double maxValue = dot.getPixMaxValue(ImageHandler.wrap(imgMap));
         Voxel3D VolxelMax = dot.getPixelMax(ImageHandler.wrap(imgMap));

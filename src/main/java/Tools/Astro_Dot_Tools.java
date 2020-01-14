@@ -562,12 +562,11 @@ private static double nucSph = 0.3;
         ImagePlus img = imgNucZCrop.duplicate();
         double dotSize = nucDotSize/imgNucZCrop.getCalibration().pixelWidth;
         IJ.run(img, "Subtract Background...", "rolling=150 stack");
-        IJ.run(img, "Remove Outliers...", "radius="+dotSize+" threshold=1 which=Bright stack");
         ImageStack stack = new ImageStack(imgNucZCrop.getWidth(), imgNucZCrop.getHeight());
         for (int i = 1; i <= img.getStackSize(); i++) {
             img.setZ(i);
             img.updateAndDraw();
-            IJ.run(img, "Nuceli Outline", "blur=15 blur2=20 threshold_method=Triangle outlier_radius=10 outlier_threshold=15 max_nucleus_size=200 "
+            IJ.run(img, "Nuceli Outline", "blur=15 blur2=20 threshold_method=Triangle outlier_radius="+dotSize+" outlier_threshold=1 max_nucleus_size=200 "
                     + "min_nucleus_size=10 erosion=5 expansion_inner=5 expansion=5 results_overlay");
             img.setZ(1);
             img.updateAndDraw();
@@ -932,8 +931,8 @@ private static double nucSph = 0.3;
         * dotsdensinAstro (dots density in astrocyte) = dotsinAstro / astroVolume
         * percDotsNotinAstro (% dots not in astrocyte = dotsNotinAstro / totalDots
         * percDotsinSoma (% dots in soma) = dotsinSoma/totalDotsAstro
-        * perDostFineBr (% dots in fine branches) = fineBrDots / totalDotsAstro
-        * perDostLargeBr (% dots in large branches) = largeBrDots / totalDotsAstro
+        * perDotsFineBr (% dots in fine branches) = fineBrDots / totalDotsAstro
+        * perDotsLargeBr (% dots in large branches) = largeBrDots / totalDotsAstro
         */
         
         // measure roi volume

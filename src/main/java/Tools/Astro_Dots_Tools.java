@@ -924,7 +924,7 @@ private static double somaDist = 2;
                 distNuc = dotObj.distCenterBorderUnit(nucObj);
             }
             int Dottype = dotObj.getValue();
-            double astroDiameter = dotObj.getPixMaxValue(ImageHandler.wrap(imgAstroMap)) * cal.pixelWidth;
+            double astroDiameter = dotObj.getPixMaxValue(ImageHandler.wrap(imgAstroMap));
             dotDiameterStats.addValue(astroDiameter);
             switch (Dottype) {
                 case 0 :

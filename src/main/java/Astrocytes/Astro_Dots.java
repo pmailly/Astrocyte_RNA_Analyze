@@ -144,10 +144,10 @@ public class Astro_Dots implements PlugIn {
                         imageNum++;
                         boolean showCal = false;
                         if (imageNum == 1) {
+                            
                             // Find channel names
                             for (int n = 0; n < sizeC; n++) {
                                 channels[n+1] = meta.getChannelName(0, n);
-                                System.out.println(channels[n]);
                             }
                             
                             // Check calibration

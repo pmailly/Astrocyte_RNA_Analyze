@@ -1,7 +1,7 @@
 
 
 
-import static Tools.Astro_Dots_Tools.*;
+import static Astrocytes.Tools.Astro_Dots_Tools.*;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Roi;
@@ -121,6 +121,7 @@ public class Astro_Dots implements PlugIn {
             int imageNum = 0;
             ArrayList<String> ch = new ArrayList();
             for (int i = 0; i < imageFile.length; i++) {
+                System.out.println(imageFile);
                 // Find nd files
                 if (imageFile[i].endsWith(".nd")) {
                     String imageName = inDir+ File.separator+imageFile[i];
@@ -128,9 +129,9 @@ public class Astro_Dots implements PlugIn {
                     // Find ROI file
                     String roi_file = imageDir+rootName+".zip";
                     if (!new File(roi_file).exists()) {
-                        IJ.showStatus("No ROI file found !");
+                        System.out.println("No ROI file found !");
                         return;
-                       }
+                    }
                     else {
                         reader.setId(imageName);
                         int series = 0;
@@ -152,18 +153,10 @@ public class Astro_Dots implements PlugIn {
                             // return the index for channels DAPI, Astro, Dots and ask for calibration if needed 
                             ch = dialog(channels, showCal);
                             
-//                            if (ch == null || templateFile == null) {
-//                                IJ.showStatus("No template file found !");
-//                                return;
-//                            }
                             cal.setUnit("microns");
                             System.out.println("x/y cal = " +cal.pixelWidth+", z cal = " + cal.pixelDepth);
                         }
-                        
-                        // Find in calibration template astromeanInt and astrobgInt
-                        //astroMeanIntTh = findCalibration(templateFile, "AstroMeanInt");
-                        //astroMeanBg = findCalibration(templateFile, "BgMeanInt");
-                        
+                                                
                         // find rois
                         RoiManager rm = new RoiManager(false);
                         rm.runCommand("Open", roi_file);
@@ -281,7 +274,7 @@ public class Astro_Dots implements PlugIn {
 
 
                                     // calculate parameters
-                                    classify_dots(nucAstro, dotsPop, imgAstro, imgAstroZCrop, imgAstroZCropMap, astroMeanIntTh, astroMeanBg);                              
+                                    classify_dots(nucAstro, dotsPop, imgAstro, imgAstroZCrop, imgAstroZCropMap);                              
 
                                     // draw objects
                                     tagsObjects(nucAstro, dotsPop, imgAstroZCrop, outDirResults, rootName, r);                               

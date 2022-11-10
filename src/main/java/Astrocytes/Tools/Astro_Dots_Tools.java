@@ -3,7 +3,6 @@ package Astrocytes.Tools;
 import static Astrocytes.Astro_Dots.cal;
 import static Astrocytes.Astro_Dots.maxMacroDotsSize;
 import static Astrocytes.Astro_Dots.meanSEMDotsSize;
-import static Astrocytes.Astro_Dots.templateFile;
 import fiji.util.gui.GenericDialogPlus;
 import ij.IJ;
 import ij.ImagePlus;
@@ -91,8 +90,6 @@ private static double thinDiam;
         gd.addChoice("DAPI : ", channels, channels[1]);
         gd.addChoice("Astrocyte : ", channels, channels[2]);
         gd.addChoice("Dots : ", channels, channels[3]);
-        gd.addMessage("Calibration template", Font.getFont("Monospace"), Color.blue);
-        gd.addFileField("Template file : ", templateFile);
         gd.addChoice("Dots Threshold Method", thMethods, thMethods[15]);
         gd.addCheckbox(" Pure mRNA in astrocyte", pureArn);
         gd.addCheckbox(" mRNA in nucleus", ratioInt);
@@ -105,7 +102,6 @@ private static double thinDiam;
         ch.add(0, gd.getNextChoice());
         ch.add(1, gd.getNextChoice());
         ch.add(2, gd.getNextChoice());
-        templateFile = gd.getNextString();
         thMethod = thMethods[gd.getNextChoiceIndex()];
         pureArn = gd.getNextBoolean();
         ratioInt = gd.getNextBoolean(); 
@@ -723,11 +719,8 @@ private static double thinDiam;
      * @param imgAstro
     * @param imgAstroZcrop read dots intensity
     * @param astroMapZcrop
-    * @param astroMeanStdInt
-    * @param bgMeanStdInt
     **/
-    public static void classify_dots(Object3D nucObj, Objects3DPopulation dotsPop, ImagePlus imgAstro, ImagePlus imgAstroZcrop, ImagePlus astroMapZcrop, 
-            double astroMeanStdInt, double bgMeanStdInt) {
+    public static void classify_dots(Object3D nucObj, Objects3DPopulation dotsPop, ImagePlus imgAstro, ImagePlus imgAstroZcrop, ImagePlus astroMapZcrop) {
         IJ.showStatus("Classify dots ....");
         double bgThresholdInt = bg;
         // if purearn exclude no dot

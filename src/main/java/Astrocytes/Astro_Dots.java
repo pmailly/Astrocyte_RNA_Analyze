@@ -125,8 +125,8 @@ public class Astro_Dots implements PlugIn {
             for (int i = 0; i < imageFile.length; i++) {
                 // For all ics or nd files
                 String fileExt = FilenameUtils.getExtension(imageFile[i]);
-                if ( ".ics".equals(fileExt) || ".nd".equals(fileExt)) {
-                    String imageName = FilenameUtils.getFullPath(imageFile[i]);
+                if ( "ics".equals(fileExt) || "nd".equals(fileExt)) {
+                    String imageName = imageDir+imageFile[i];
                     String rootName = FilenameUtils.getBaseName(imageFile[i]);
                     // Find ROI file
                     String roi_file = imageDir+rootName+".zip";
@@ -145,8 +145,11 @@ public class Astro_Dots implements PlugIn {
                         boolean showCal = false;
                         if (imageNum == 1) {
                             // Find channel names
-                            for (int n = 1; n < sizeC; n++)
-                                channels[n] = meta.getChannelExcitationWavelength(0, n).value().toString();
+                            for (int n = 0; n < sizeC; n++) {
+                                channels[n+1] = meta.getChannelName(0, n);
+                                System.out.println(channels[n]);
+                            }
+                            
                             // Check calibration
                             cal.pixelWidth = meta.getPixelsPhysicalSizeX(series).value().doubleValue();
                             cal.pixelHeight = cal.pixelWidth;
@@ -196,9 +199,7 @@ public class Astro_Dots implements PlugIn {
                             channelIndex = ArrayUtils.indexOf(channels, ch.get(1));
                             System.out.println("Opening Astrocyte channel : " + rootName + "("+ch.get(1)+")");
                             imgAstro = BF.openImagePlus(options)[channelIndex];
-
                             
-
                             // Dots channel
                             channelIndex = ArrayUtils.indexOf(channels, ch.get(2));
                             System.out.println("Opening Dots channel : " + rootName + "("+ch.get(2)+")");
@@ -206,22 +207,22 @@ public class Astro_Dots implements PlugIn {
                         }
                         else {
                             // Nucleus channel
-                            String chName = "_w" + ArrayUtils.indexOf(channels, ch.get(0)) + ch.get(0);
+                            String chName = "_w" + ArrayUtils.indexOf(channels, ch.get(0)) + ch.get(0).replace("_", "-");
                             String dapiFile = inDir + File.separator + rootName + chName + ".TIF";
                             System.out.println("Opening Nucleus channel : "+ dapiFile);
                             imgNuc = IJ.openImage(dapiFile);
                             imgNuc.setCalibration(cal);
                         
                             // Astrocyte channel
-                            chName = "_w" + ArrayUtils.indexOf(channels, ch.get(1)) + ch.get(1);
-                            String astroFile = inDir + File.separator + rootName + chName + "_cmle.tif";
+                            chName = "_w" + ArrayUtils.indexOf(channels, ch.get(1)) + ch.get(1).replace("_", "-");
+                            String astroFile = inDir + File.separator + rootName + chName + "_cmle.TIF";
                             System.out.println("Opening Astrocyte channel : " + astroFile);
                             imgAstro = IJ.openImage(astroFile);
                             imgAstro.setCalibration(cal);
 
                             // Dots channel
-                            chName = "_w" + ArrayUtils.indexOf(channels, ch.get(2)) + ch.get(2);
-                            String dotsFile = inDir + File.separator + rootName + chName + "_cmle.tif";
+                            chName = "_w" + ArrayUtils.indexOf(channels, ch.get(2)) + ch.get(2).replace("_", "-");
+                            String dotsFile = inDir + File.separator + rootName + chName + "_cmle.TIF";
                             System.out.println("Opening Dots channel : " + dotsFile);
                             imgDots = IJ.openImage(dotsFile);
                             imgDots.setCalibration(cal);
